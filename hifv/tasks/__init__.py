@@ -3,7 +3,7 @@ from .opcal import Opcal
 from .gaincurves import GainCurves
 from .flagging import FlagDeterVLA
 from .exportdata import VLAExportData
-from .flagging import Checkflag
+from .flagging import Checkflag, Aoflagger
 from .rqcal import Rqcal
 from .swpowcal import Swpowcal
 from .setmodel import VLASetjy

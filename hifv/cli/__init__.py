@@ -2,6 +2,7 @@
 """
 from .hifv_analyzestokescubes import hifv_analyzestokescubes
 from .hifv_applycals import hifv_applycals
+from .hifv_aoflagger import hifv_aoflagger
 from .hifv_checkflag import hifv_checkflag
 from .hifv_circfeedpolcal import hifv_circfeedpolcal
 from .hifv_exportdata import hifv_exportdata
@@ -38,6 +39,7 @@ from .hifv_vlassmasking import hifv_vlassmasking
 __all__ = ['hifv_analyzestokescubes',
            'hifv_applycals',
            'hifv_checkflag',
+           'hifv_aoflagger',
            'hifv_circfeedpolcal',
            'hifv_exportdata',
            'hifv_exportvlassdata',
