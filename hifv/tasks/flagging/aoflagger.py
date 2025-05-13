@@ -11,7 +11,7 @@ from pipeline.infrastructure import (casa_tasks, casa_tools, task_registry,
                                      utils)
 from pipeline.infrastructure.contfilehandler import contfile_to_spwsel
 
-from .displaycheckflag import checkflagSummaryChart
+from pipeline.infrastructure.utils import subprocess
 
 LOG = infrastructure.get_logger(__name__)
 
@@ -23,6 +23,7 @@ class AoflaggerInputs(vdp.StandardInputs):
     processing_data_type = [DataType.REGCAL_CONTLINE_ALL, DataType.RAW]
 
     flag_target = vdp.VisDependentProperty(default='')
+    aoflagger_file = vdp.VisDependentProperty(default='')
 
     def __init__(self, context, vis=None, flag_target=None, aoflagger_file=None):
         super(AoflaggerInputs, self).__init__()
@@ -67,7 +68,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
     def prepare(self):
 
-        LOG.info("Aoflagger task: {}".format(repr(self.inputs.flag_target)))
+        LOG.info(f"Aoflagger task: {self.inputs.flag_target}, using {self.inputs.aoflagger_file}")
 
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
         self.tint = ms.get_vla_max_integration_time()
@@ -113,12 +114,11 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
         # PIPE-502/995: run the before-flagging summary in most checkflagmodes, including 'vlass-imaging'
         # PIPE-757: skip in all VLASS calibration checkflagmodes: 'bpd-vlass', 'allcals-vlass', and 'target-vlass'
-        if self.inputs.flag_target not in ('bpd-vlass', 'allcals-vlass', 'target-vlass'):
-            job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='before',
-                                      field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
-            summarydict = self._executor.execute(job)
-            if summarydict is not None:
-                summaries.append(summarydict)
+        job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='before',
+                                  field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
+        summarydict = self._executor.execute(job)
+        if summarydict is not None:
+            summaries.append(summarydict)
 
         # PIPE-502/995/987: save before-flagging time-averged MS and its amp-related stats for weblog
         if self.inputs.flag_target in ('allcals-vla', 'bpd-vla', 'target-vla',
@@ -144,47 +144,25 @@ class Aoflagger(basetask.StandardTaskTemplate):
                                      merge='replace')
         self._executor.execute(job)
 
-        # decide on if we use cont.dat for target-vla
-        use_contdat = False
-        if self.inputs.flag_target == 'target-vla':
-            fielddict = contfile_to_spwsel(self.inputs.vis, self.inputs.context)
-            if fielddict != {}:
-                LOG.info('cont.dat file present.  Using VLA Spectral Line Heuristics for checkflagmode=target-vla.')
-                use_contdat = True
 
-        if use_contdat:
-            # cont.dat is present for target-vla, do the field-by-field flagging
-            for field in fielddict:
-                fieldselect_cont = utils.fieldname_for_casa(field)
-                self.do_rfi_flag(fieldselect=fieldselect_cont, scanselect=scanselect,
-                                 intentselect=intentselect, spwselect=fielddict[field])
-                # PIPE-1342: do a second pass of rflag in the 'target-vla' mode (equivalent to running hifv_targetvla)
-                if self.inputs.flag_target == 'target-vla':
-                    self.do_vla_targetflag(fieldselect=fieldselect_cont, scanselect=scanselect,
-                                           intentselect=intentselect, spwselect=fielddict[field])
+        # Do the actual flagging
+        if self.inputs.flag_target in ('primary', 'secondary', 'science'):
+            datacolumn = 'DATA'
         else:
-            # all other situations
-            self.do_rfi_flag(fieldselect=fieldselect, scanselect=scanselect,
-                             intentselect=intentselect, spwselect=self.sci_spws)
-            # PIPE-1342: do a second pass of rflag in the 'target-vla' mode (equivalent to running hifv_targetvla)
-            if self.inputs.flag_target == 'target-vla':
-                self.do_vla_targetflag(fieldselect='', scanselect=scanselect,
-                                       intentselect=intentselect, spwselect='')
+            datacolumn = 'CORRECTED_DATA'
+
+        self.do_rfi_flag(fieldselect=fieldselect, datacolumn=datacolumn)
 
         # PIPE-502/757/995: get after-flagging statistics, NOT for bpd-vlass and allcals-vlass
-        if self.inputs.flag_target not in ('bpd-vlass', 'allcals-vlass'):
-            job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='after',
-                                      field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
-            summarydict = self._executor.execute(job)
-            if summarydict is not None:
-                summaries.append(summarydict)
+        job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='after',
+                                  field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
+        summarydict = self._executor.execute(job)
+        if summarydict is not None:
+            summaries.append(summarydict)
 
         # PIPE-502/995/987: save after-flagging time-averaged MS and its amp-related stats for weblog
-        if self.inputs.flag_target in ('allcals-vla', 'bpd-vla', 'target-vla',
-                                         'bpd', 'allcals',
-                                         'bpd-vlass', 'allcals-vlass', 'vlass-imaging'):
-            vis_averaged_after, vis_ampstats_after = self._create_timeavg_ms(suffix='after')
-            vis_averaged.update(after=vis_averaged_after, after_amp=vis_ampstats_after)
+        vis_averaged_after, vis_ampstats_after = self._create_timeavg_ms(suffix='after')
+        vis_averaged.update(after=vis_averaged_after, after_amp=vis_ampstats_after)
 
         checkflag_result = AoflaggerResults()
         checkflag_result.summaries = summaries
@@ -199,272 +177,24 @@ class Aoflagger(basetask.StandardTaskTemplate):
     def analyse(self, results):
         return results
 
-    def _do_extendflag(self, mode='extend', field=None,  scan=None, intent='', spw='',
-                       ntime='scan', extendpols=True, flagbackup=False,
-                       growtime=100.0, growfreq=60.0, growaround=False,
-                       flagneartime=False, flagnearfreq=False):
-
-        task_args = {'vis': self.inputs.vis,
-                     'mode': mode,
-                     'field': field,
-                     'scan': scan,
-                     'intent': intent,
-                     'spw': spw,
-                     'ntime': ntime,
-                     'combinescans': False,
-                     'extendpols': extendpols,
-                     'growtime': growtime,
-                     'growfreq': growfreq,
-                     'growaround': growaround,
-                     'flagneartime': flagneartime,
-                     'flagnearfreq': flagnearfreq,
-                     'action': 'apply',
-                     'display': '',
-                     'extendflags': False,
-                     'flagbackup': flagbackup,
-                     'savepars': False}
-
-        job = casa_tasks.flagdata(**task_args)
-        result = self._executor.execute(job)
-
-        return job, result
-
-    def _do_tfcropflag(self, mode='tfcrop', field=None, correlation=None, scan=None, intent='', spw='',
-                       ntime=0.45, datacolumn='corrected', flagbackup=False,
-                       freqcutoff=3.0, timecutoff=4.0, savepars=True,
-                       extendflags=False):
-
-        # pass 'extendflags' to flagdata(mode='tfcrop') if boolean
-        if isinstance(extendflags, bool):
-            extendflags_tfcrop = extendflags
-        else:
-            extendflags_tfcrop = False
-
-        task_args = {'vis': self.inputs.vis,
-                     'mode': mode,
-                     'field': field,
-                     'correlation': correlation,
-                     'scan': scan,
-                     'intent': intent,
-                     'spw': spw,
-                     'ntime': ntime,
-                     'combinescans': False,
-                     'datacolumn': datacolumn,
-                     'freqcutoff': freqcutoff,
-                     'timecutoff': timecutoff,
-                     'freqfit': 'line',
-                     'flagdimension': 'freq',
-                     'action': 'apply',
-                     'display': '',
-                     'extendflags': extendflags_tfcrop,
-                     'flagbackup': flagbackup,
-                     'savepars': savepars}
-
-        job = casa_tasks.flagdata(**task_args)
-        result = self._executor.execute(job)
-
-        # a seperate flagdata(mode='extent',...) call if 'extendflags' is a dictionary
-        if isinstance(extendflags, dict):
-            self._do_extendflag(field=field, scan=scan, intent=intent, spw=spw, **extendflags)
-
-        return
-
-    def _do_rflag(self, mode='rflag', field=None, correlation=None, scan=None, intent='', spw='',
-                  ntime='scan', datacolumn='corrected', flagbackup=False, timedevscale=4.0,
-                  freqdevscale=4.0, timedev='', freqdev='', savepars=True,
-                  calcftdev=True, useheuristic=True, ignore_sefd=False,
-                  extendflags=False):
-        """Run rflag heuristics.
-
-        calcftdev: a single-pass 'rflag' (False) or a 'calculate'->'apply' aips-style two-pass operation (True)
-        useheuristics: run the freqdev/timedev threshold heuristics (True), or act as a pass-through (False)
-                       only affect operation when calcftdev is True.
-        extendflags: set the "extendflags" plan.
-            True/False: toggle the 'extendflags' argument in the 'rflag' flagdata() call
-            Dictionary: do flag extension with a seperate flagdata() call
-        """
-        # pass 'extendflags' to flagdata(mode='rflag') if boolean
-        if isinstance(extendflags, bool):
-            extendflags_rflag = extendflags
-        else:
-            extendflags_rflag = False
-
-        task_args = {'vis': self.inputs.vis,
-                     'mode': mode,
-                     'field': field,
-                     'correlation': correlation,
-                     'scan': scan,
-                     'intent': intent,
-                     'spw': spw,
-                     'ntime': ntime,
-                     'combinescans': False,
-                     'datacolumn': datacolumn,
-                     'winsize': 3,
-                     'timedevscale': timedevscale,
-                     'freqdevscale': freqdevscale,
-                     'timedev': timedev,
-                     'freqdev': freqdev,
-                     'action': 'apply',
-                     'display': '',
-                     'extendflags': extendflags_rflag,
-                     'flagbackup': flagbackup,
-                     'savepars': savepars}
-
-        if calcftdev:
-            task_args['action'] = 'calculate'
-
-            job = casa_tasks.flagdata(**task_args)
-            jobresult = self._executor.execute(job)
-
-            if jobresult is None:
-                LOG.debug("This is likely a dryrun test! Proceed with timedev/freqdev=''.")
-                ftdev = None
-            else:
-                if jobresult['nreport'] == 0:
-                    LOG.info("Null data selection for the Rflag sequence. Continue.")
-                    return
-                if useheuristic:
-                    ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
-                    rflagdev = RflagDevHeuristic(ms, ignore_sefd=ignore_sefd)
-                    ftdev = rflagdev(jobresult['report0'])
-                else:
-                    ftdev = jobresult['report0']
-
-            if ftdev is not None:
-                task_args['timedev'] = ftdev['timedev']
-                task_args['freqdev'] = ftdev['freqdev']
-            task_args['action'] = 'apply'
-
-        job = casa_tasks.flagdata(**task_args)
-        jobresult = self._executor.execute(job)
-
-        # a seperate flagdata(mode='extent',...) call if 'extendflags' is a dictionary
-        if isinstance(extendflags, dict):
-            self._do_extendflag(field=field, scan=scan, intent=intent, spw=spw, **extendflags)
-
-        return
-
-    def do_rfi_flag(self, fieldselect='', scanselect='', intentselect='', spwselect=''):
+    def do_rfi_flag(self, fieldselect='', datacolumn='DATA'):
         """Do RFI flagging using multiple passes of rflag/tfcrop/extend."""
 
-        rflag_standard, tfcrop_standard, growflag_standard = self._select_rfi_standard()
-        flagbackup = False
-        calcftdev = True
+        if datacolumn == 'CORRECTED_DATA':
+            LOG.info("UV subtracting vis as datacolumn is corrected")
+            job = casa_tasks.uvsub({'vis': self.inputs.vis})
+            self._executor.execute(job)
+        cmd = f"aoflagger -fields {fieldselect} -column {datacolumn} -strategy {self.inputs.aoflagger_file} {self.inputs.vis}"
 
-        # set ignore_sedf=True/flagbackup=False to maintain the same behavior as the deprecated do_*vlass() methods
-        ignore_sefd = self.inputs.flag_target in ('target-vlass', 'bpd-vlass', 'allcals-vlass', 'vlass-imaging')
+        LOG.info(f"Running '{cmd}' via subprocess")
+        result = subprocess.run(cmd)
+        LOG.info(f"Finished with exit code {result}")
 
-        # set calcftdev=False to turn off the new heuristic for some older modes
-        calcftdev = self.inputs.flag_target not in ('semi', '', 'target', 'bpd', 'allcals')
-
-        if rflag_standard is not None:
-
-            for datacolumn, correlation, scale, extendflags in rflag_standard:
-                if '_' in correlation:
-                    polselect = correlation.split('_')[1]
-                    if not (polselect in self.corr_type_string or polselect == self.corrstring):
-                        continue
-                    if not mssel_valid(self.inputs.vis, field=fieldselect, spw=spwselect, correlation=polselect,
-                                       scan=scanselect, intent=intentselect):
-                        continue
-                if datacolumn == 'residual':
-                    # PIPE-1256: determine if we can use the 'RESIDUAL' column in the 'bpd-vlass/vla' mode.
-                    #   The usage of 'RESIDUAL' is only valid if the model of bpd source(s) is properly filled *AND*
-                    #   the first-order gain/passband calibration has been applied in 'CORRECTED'.
-                    #   Here we check each field from the data selection and see if they all meet the above requirements.
-                    #   We only examine the parallel hand amplitude:
-                    #       - setjy() has only I models for 3C48/3C138/3C286/3C147.
-                    #       - setjy(fluxdensity=-1) will fill the cross-hand with zero values.
-                    LOG.info("Determining if we can use the RESIDUAL column for rflag:")
-                    if self._is_model_setjy():
-                        LOG.info("  MODEL_DATA is present and none of the model(s) from selected data is a 1Jy point source.")
-                    else:
-                        datacolumn = 'corrected'
-                        correlation = correlation.replace('REAL_', 'ABS_')
-                        LOG.info("  MODEL_DATA s not found or the model(s) from selected data contains 1Jy point source(s).")
-                    LOG.info("  Use the {} column and correlation = {!r} for rflag".format(datacolumn.upper(), correlation))
-                method_args = {'mode': 'rflag',
-                               'field': fieldselect,
-                               'correlation': correlation,
-                               'scan': scanselect,
-                               'intent': intentselect,
-                               'spw': spwselect,
-                               'ntime': 'scan',
-                               'timedevscale': scale,
-                               'freqdevscale': scale,
-                               'datacolumn': datacolumn,
-                               'flagbackup': flagbackup,
-                               'savepars': False,
-                               'calcftdev': calcftdev,
-                               'useheuristic': True,
-                               'ignore_sefd': ignore_sefd,
-                               'extendflags': extendflags}
-
-                self._do_rflag(**method_args)
-
-        if tfcrop_standard is not None:
-
-            for datacolumn, correlation, tfcropThreshMultiplier, extendflags in tfcrop_standard:
-                if '_' in correlation:
-                    polselect = correlation.split('_')[1]
-                    if not (polselect in self.corr_type_string or polselect == self.corrstring):
-                        continue
-                    if not mssel_valid(self.inputs.vis, field=fieldselect, spw=spwselect, correlation=polselect,
-                                       scan=scanselect, intent=intentselect):
-                        continue
-                timecutoff = 4. if tfcropThreshMultiplier is None else tfcropThreshMultiplier
-                freqcutoff = 3. if tfcropThreshMultiplier is None else tfcropThreshMultiplier
-                method_args = {'mode': 'tfcrop',
-                               'field': fieldselect,
-                               'correlation': correlation,
-                               'scan': scanselect,
-                               'intent': intentselect,
-                               'spw': spwselect,
-                               'timecutoff': timecutoff,
-                               'freqcutoff': freqcutoff,
-                               'ntime': self.tint,
-                               'datacolumn': datacolumn,
-                               'flagbackup': flagbackup,
-                               'savepars': False,
-                               'extendflags': extendflags}
-
-                self._do_tfcropflag(**method_args)
-
-        if growflag_standard is not None:
-            self._do_extendflag(
-                field=fieldselect, scan=scanselect, intent=intentselect, spw=spwselect, flagbackup=flagbackup, **growflag_standard)
-
+        if datacolumn == 'CORRECTED_DATA':
+            LOG.info("Reversing UV subtraction on vis as datacolumn was corrected")
+            job = casa_tasks.uvsub({'vis': self.inputs.vis, 'reverse': True})
+            self._executor.execute(job)
         return
-
-    def do_vla_targetflag(self, fieldselect='', scanselect='', intentselect='', spwselect=''):
-        """"Perform a simple second 'rflag' pass.
-
-        This method is equivalent to hifv_targetflag(intents='*TARGET*'), which is phasing out.
-        See PIPE-1342.
-        """
-
-        task_args = {'vis': self.inputs.vis,
-                     'mode': 'rflag',
-                     'field': fieldselect,
-                     'correlation': 'ABS_'+self.corrstring,
-                     'scan': scanselect,
-                     'intent': intentselect,
-                     'spw': spwselect,
-                     'ntime': 'scan',
-                     'combinescans': False,
-                     'datacolumn': 'corrected',
-                     'winsize': 3,
-                     'timedevscale': 4.0,
-                     'freqdevscale': 4.0,
-                     'action': 'apply',
-                     'display': '',
-                     'extendflags': False,
-                     'flagbackup': False,
-                     'savepars': True}
-
-        job = casa_tasks.flagdata(**task_args)
-
-        return self._executor.execute(job)
 
     def _select_data(self):
         """Selects data according to the specified checkflagmode.
@@ -483,7 +213,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
         # start with default
         fieldselect = scanselect = intentselect = ''
-        columnselect = 'corrected'
+        columnselect = 'corrected' if "corrected" in self.inputs.flag_target else 'data'
 
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
         msinfo = self.inputs.context.evla['msinfo'].get(ms.name, None)
@@ -505,7 +235,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
             scanselect = ','.join(map(str, sorted(testpbd_scans)))
 
         # Select all calibrators excluding BPD calibrators
-        if self.inputs.flag_target in ('allcals-vla', 'allcals-vlass', 'allcals'):
+        if self.inputs.flag_target in ('primary-corrected', 'secondary-corrected'):
             if msinfo.testgainscans:
                 testpbd_scans = {
                     s.id for s in ms.get_scans(
@@ -531,19 +261,10 @@ class Aoflagger(basetask.StandardTaskTemplate):
                 fieldselect = ','.join(map(str, sorted(fields_in_scans)))
 
         # select targets
-        if self.inputs.flag_target in ('target-vla', 'target-vlass', 'vlass-imaging', 'target'):
+        if self.inputs.flag_target in ('science', 'science-corrected'):
             fieldids = [field.id for field in ms.get_fields(intent='TARGET')]
             fieldselect = ','.join([str(fieldid) for fieldid in fieldids])
             intentselect = '*TARGET*'
-
-        # select all calibrators
-        if self.inputs.flag_target == 'semi':
-            fieldselect = msinfo.calibrator_field_select_string
-            scanselect = msinfo.calibrator_scan_select_string
-
-        if self.inputs.flag_target == 'vlass-imaging':
-            # use the 'data' column by default as 'vlass-imaging' is working on target-only MS.
-            columnselect = 'data'
 
         LOG.debug('FieldSelect:  {}'.format(repr(fieldselect)))
         LOG.debug('ScanSelect:   {}'.format(repr(scanselect)))
@@ -551,215 +272,6 @@ class Aoflagger(basetask.StandardTaskTemplate):
         LOG.debug('ColumnSelect: {}'.format(repr(columnselect)))
 
         return fieldselect, scanselect, intentselect, columnselect
-
-    def _select_rfi_standard(self):
-        """Set rflag data selection and threshold-multiplier in individual rflag iterations.
-
-        Note from BK:
-        Set up threshold multiplier values for calibrators and targets separately.
-        Xpol are used for cross-hands, Ppol are used for parallel hands. As
-        noted above, I'm still refining these values; I suppose they could be
-        input parameters for the task, if needed.
-
-        rflag_standard: list of tuple, with each tuple (a, b, c, d) describing the specifications of one self._do_rflag call:
-
-                            a) data column selection
-                            b) correlation selection
-                            c) ftdev threshold multiplier
-                            d) extendflag setting
-                                Boolean (True/False):
-                                    use the default basic extendflagging scheme; see the 'extendflags' subprameter of flagdata(mode='rflag'.
-                                A dictionary (e.g. {'growtime':100,'growfreq':100,'')
-                                    do extendflag using seperate flagdata(mode='extend',..) call following flagdata(model='rflag',extendflags=False,..)
-
-        tfcrop_standard: list of tuple, with each tuple (a, b, c, d) describing the specifications of one self._do_rflag call:
-
-                            a) data column selection
-                            b) correlation selection
-                            c) tfcrop threshold multiplier
-                            d) extendflag setting
-                                Boolean (True/False):
-                                    use the default basic extendflagging scheme; see the 'extendflags' subprameter of flagdata(mode='rflag'.
-                                A dictionary (e.g. {'growtime':100,'growfreq':100,'')
-                                    do extendflag using seperate flagdata(mode='extend',..) call following flagdata(model='rflag',extendflags=False,..
-
-        growflag_standrd: dictionary to specify the final optional "growflags".
-        """
-        rflag_standard = tfcrop_standard = growflag_standard = None
-
-        if self.inputs.flag_target == 'bpd-vla':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            #           with an optional growflag step specified by the 'growflags' task argument
-            rflag_standard = [('corrected', 'ABS_RL', 5.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LR', 5.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('residual', 'REAL_RR', 5.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('residual', 'REAL_LL', 5.0, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_RR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LL', 4.0, {'growtime': 100., 'growfreq': 100.})]
-            if self.inputs.growflags:
-                growflag_standard = {'growtime': 100,
-                                     'growfreq': 100,
-                                     'growaround': True,
-                                     'flagneartime': False,
-                                     'flagnearfreq': True}
-
-        if self.inputs.flag_target == 'bpd-vlass':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('residual', 'REAL_RR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('residual', 'REAL_LL', 4.0, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_RR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LL', 3.0, {'growtime': 100., 'growfreq': 100.})]
-            growflag_standard = {'growtime': 100,
-                                 'growfreq': 100,
-                                 'growaround': True,
-                                 'flagneartime': True,
-                                 'flagnearfreq': True}
-
-        if self.inputs.flag_target == 'allcals-vla':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            #           with an optional growflag step specified by the 'growflags' task argument
-            rflag_standard = [('corrected', 'ABS_RL', 5.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LR', 5.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_RR', 5.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LL', 5.0, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_RR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LL', 4.0, {'growtime': 100., 'growfreq': 100.})]
-            if self.inputs.growflags:
-                growflag_standard = {'growtime': 100,
-                                     'growfreq': 100,
-                                     'growaround': True,
-                                     'flagneartime': False,
-                                     'flagnearfreq': True}
-
-        if self.inputs.flag_target == 'allcals-vlass':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_RR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LL', 4.0, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_RR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LL', 3.0, {'growtime': 100., 'growfreq': 100.})]
-            growflag_standard = {'growtime': 100,
-                                 'growfreq': 100,
-                                 'growaround': True,
-                                 'flagneartime': True,
-                                 'flagnearfreq': True}
-
-        if self.inputs.flag_target == 'target-vla':
-            # PIPE-685: follow the VLASS flagging scheme described in CAS-11598
-            # PIPE-987: disable growflags
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_RR', 4.5, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LL', 4.5, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_RR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LL', 3.0, {'growtime': 100., 'growfreq': 100.})]
-
-        if self.inputs.flag_target == 'target-vlass':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_RR', 7.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('corrected', 'ABS_LL', 7.0, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_RR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('corrected', 'ABS_LL', 3.0, {'growtime': 100., 'growfreq': 100.})]
-
-        if self.inputs.flag_target == 'vlass-imaging':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            rflag_standard = [('data', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('data', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('residual_data', 'ABS_RR', 4.0, {'growtime': 100., 'growfreq': 100.}),
-                              ('residual_data', 'ABS_LL', 4.0, {'growtime': 100., 'growfreq': 100.})]
-            tfcrop_standard = [('data', 'ABS_RL', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('data', 'ABS_LR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('data', 'ABS_RR', 3.0, {'growtime': 100., 'growfreq': 100.}),
-                               ('data', 'ABS_LL', 3.0, {'growtime': 100., 'growfreq': 100.})]
-
-        if self.inputs.flag_target == 'target':
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_RR', 7.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_LL', 7.0, {'growtime': 100., 'growfreq': 60.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_RR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LL', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_RR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LL', None, {'growtime': 100., 'growfreq': 60.})]
-
-        if self.inputs.flag_target == 'bpd':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('residual', 'REAL_RR', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('residual', 'REAL_LL', 4.0, {'growtime': 100., 'growfreq': 60.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_RR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LL', None, {'growtime': 100., 'growfreq': 60.})]
-            if self.inputs.growflags:
-                growflag_standard = {'growtime': 100,
-                                     'growfreq': 100,
-                                     'growaround': True,
-                                     'flagneartime': True,
-                                     'flagnearfreq': False}
-
-        if self.inputs.flag_target == 'allcals':
-            # PIPE-987: follow the VLASS flagging scheme described in CAS-11598.
-            rflag_standard = [('corrected', 'ABS_RL', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_LR', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_RR', 4.0, {'growtime': 100., 'growfreq': 60.}),
-                              ('corrected', 'ABS_LL', 4.0, {'growtime': 100., 'growfreq': 60.})]
-            tfcrop_standard = [('corrected', 'ABS_RL', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_RR', None, {'growtime': 100., 'growfreq': 60.}),
-                               ('corrected', 'ABS_LL', None, {'growtime': 100., 'growfreq': 60.})]
-            if self.inputs.growflags:
-                growflag_standard = {'growtime': 100,
-                                     'growfreq': 100,
-                                     'growaround': True,
-                                     'flagneartime': True,
-                                     'flagnearfreq': False}
-
-        if self.inputs.flag_target in ('', 'semi'):
-            rflag_standard = [('corrected', 'ABS_'+self.corrstring, 4.0, False)]
-            if self.inputs.growflags:
-                growflag_standard = {'growtime': 100,
-                                     'growfreq': 100,
-                                     'growaround': True,
-                                     'flagneartime': True,
-                                     'flagnearfreq': False}
-
-        LOG.debug('rflag_standard:     {}'.format(repr(rflag_standard)))
-        LOG.debug('tfcrop_standard:    {}'.format(repr(tfcrop_standard)))
-        LOG.debug('growflag_standard:  {}'.format(repr(growflag_standard)))
-
-        return rflag_standard, tfcrop_standard, growflag_standard
-
-    def _check_for_modelcolumn(self):
-        ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
-        with casa_tools.TableReader(ms.name) as table:
-            if 'MODEL_DATA' not in table.colnames() or self.inputs.overwrite_modelcol:
-                LOG.info('Writing model data to {}'.format(ms.basename))
-                imaging_parameters = set_add_model_column_parameters(self.inputs.context)
-                job = casa_tasks.tclean(**imaging_parameters)
-                tclean_result = self._executor.execute(job)
-            else:
-                LOG.info('Using existing MODEL_DATA column found in {}'.format(ms.basename))
 
     def _create_timeavg_ms(self, suffix='before'):
 
@@ -794,53 +306,3 @@ class Aoflagger(basetask.StandardTaskTemplate):
                                              timeaverage=False, timebin='0s', timespan='')
 
         return vis_averaged_name, vis_ampstats
-
-    def _create_summaryplots(self, suffix='before', plotms_args={}):
-        """Preload the display class to generate before-flagging plot(s)."""
-        summary_plots = {}
-        results_tmp = basetask.ResultsList()
-        results_tmp.inputs = self.inputs.as_dict()
-        results_tmp.stage_number = self.inputs.context.task_counter
-        results_tmp.plots = {}
-        summary_plots = checkflagSummaryChart(
-            self.inputs.context, results_tmp, suffix=suffix, plotms_args=plotms_args).plot()
-
-        return summary_plots
-
-    def _is_model_setjy(self):
-        """Check the model column status of selected fields.
-
-        return True, if the below requirements are met:
-            - the model column is present.
-            - none of selected field(s) contain a model of 1Jy point source at the phasecenter (in the parallel hands)
-        """
-        fieldselect, scanselect, intentselect, columnselect = self._select_data()
-        is_model_setjy = True
-
-        # set False if the MODEL column is not present.
-        with casa_tools.TableReader(self.inputs.vis) as table:
-            if 'MODEL_DATA' not in table.colnames():
-                is_model_setjy = False
-
-        if is_model_setjy:
-            with casa_tools.MSReader(self.inputs.vis) as msfile:
-                # we expect fieldselect is not an empty string here...
-                for field in fieldselect.split(','):
-                    staql = {'field': field, 'spw': self.sci_spws, 'scan': scanselect,
-                             'scanintent': intentselect, 'polarization': '', 'uvdist': ''}
-                    if msfile.msselect(staql, onlyparse=False):
-                        vis_ampstats = msfile.statistics(field=field, scan=scanselect, intent=intentselect,
-                                                         correlation='RR,LL', column='model',
-                                                         complex_value='amp', useweights=False, useflags=False,
-                                                         reportingaxes='', doquantiles=False,
-                                                         timeaverage=False, timebin='0s', timespan='')
-                        vis_ampstats = vis_ampstats['']
-                        LOG.debug('checking the MODEL amplitude stats of field = {!r}:\n{!r}'.format(
-                            field, vis_ampstats))
-                        if vis_ampstats['min'] == 1 and vis_ampstats['max'] == 1:
-                            is_model_setjy = False
-                            break
-                    msfile.reset()
-
-        return is_model_setjy
-
