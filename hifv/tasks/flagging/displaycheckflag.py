@@ -12,6 +12,99 @@ from scipy.interpolate import griddata
 
 LOG = infrastructure.get_logger(__name__)
 
+class aoflaggerSummaryChart(object):
+    def __init__(self, context, result, suffix='', plotms_args={}):
+        self.context = context
+        self.result = result
+        self.ms = context.observing_run.get_ms(result.inputs['vis'])
+        self.suffix = suffix
+        self.plotms_args = plotms_args
+        # self.caltable = result.final[0].gaintable
+
+    def plot(self):
+        plots = [None]
+
+        if self.result.inputs['flag_target'] in ('primary', 'primary-corrected'):
+            plots = [self.get_plot_wrapper('primary')]
+        if self.result.inputs['flag_target'] in ('secondary', 'secondary-corrected'):
+            plots = [self.get_plot_wrapper('secondary')]
+        if self.result.inputs['flag_target'] == 'science':
+            plots = [self.get_plot_wrapper('science')]
+        return [p for p in plots if p is not None]
+
+    def create_plot(self, prefix):
+
+        figfile = self.get_figfile(prefix)
+
+        if self.suffix == 'before':
+            vis = self.result.vis_averaged['before']
+            vis_stats = self.result.vis_averaged['before_amp']
+            amp_range = [vis_stats['']['min'], vis_stats['']['max']]
+            title = 'Amp vs. Frequency (before flagging), {}'.format(prefix)
+        if self.suffix == 'after':
+            vis = self.result.vis_averaged['after']
+            vis_stats = self.result.vis_averaged['before_amp']
+            amp_range = [vis_stats['']['min'], vis_stats['']['max']]
+            title = 'Amp vs. Frequency (after flagging), {}'.format(prefix)
+        if self.suffix == 'after-autoscale':
+            vis = self.result.vis_averaged['after']
+            amp_range = [0., 0.]
+            title = 'Amp vs. Frequency (after flagging, autoscale), {}'.format(prefix)
+
+        # use the time-averged MS from the task to make the CASAplotms callmodify the plotms() call args.
+        plotms_args = {'vis': vis,
+                       'xaxis': 'freq', 'yaxis': 'amp',
+                       'xdatacolumn': '', 'ydatacolumn': 'data',
+                       'selectdata': True, 'field': '', 'scan': '', 'correlation': '',
+                       'averagedata': False, 'avgtime': '1e8', 'avgscan': False,
+                       'transform': False, 'extendflag': False,
+                       'coloraxis': 'antenna2', 'plotrange': [0, 0, 0, 0],
+                       'plotfile': figfile, 'overwrite': True, 'clearplots': True, 'showgui': False}
+        plotms_args.update(self.plotms_args)
+        plotms_args.update(title=title)
+        amp_d = amp_range[1]-amp_range[0]
+        plotms_args.update(plotrange=[0, 0, max(0, amp_range[0]-0.1*amp_d), amp_range[1]+0.1*amp_d])
+
+        if prefix == 'primary':
+            plotms_args.update(field=self.context.evla['msinfo'][self.ms.name].bandpass_field_select_string)
+            plotms_args.update(scan=self.context.evla['msinfo'][self.ms.name].bandpass_scan_select_string)
+        
+        LOG.info('Creating {}'.format(plotms_args['title']))
+
+        # run plotms
+        job = casa_tasks.plotms(**plotms_args)
+        job.execute()
+
+        return plotms_args
+
+    def get_figfile(self, prefix):
+        stage_dir = os.path.join(self.context.report_dir, 'stage{}'.format(self.result.stage_number))
+        if not os.path.exists(stage_dir):
+            os.mkdir(stage_dir)
+        fig_basename = '-'.join(list(filter(None, ['aoflagger', prefix,
+                                                   self.ms.basename, 'summary', self.suffix])))+'.png'
+        return os.path.join(stage_dir, fig_basename)
+
+    def get_plot_wrapper(self, prefix):
+
+        figfile = self.get_figfile(prefix)
+        if not os.path.exists(figfile):
+            LOG.trace('Aoflagger summary plot not found. Creating new plot.')
+            try:
+                plotms_args = self.create_plot(prefix)
+            except Exception as ex:
+                LOG.error('Could not create ' + prefix + ' plot.')
+                LOG.exception(ex)
+                return None
+
+        wrapper = logger.Plot(figfile, x_axis='freq', y_axis='amp',
+                              parameters={'vis': self.ms.basename,
+                                          'type': prefix,
+                                          'version': self.suffix,
+                                          'plotms_args': plotms_args,
+                                          'spw': ''})
+        return wrapper
+
 
 class checkflagSummaryChart(object):
     def __init__(self, context, result, suffix='', plotms_args={}):

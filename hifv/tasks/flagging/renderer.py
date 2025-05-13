@@ -204,6 +204,99 @@ class T2_4MDetailscheckflagRenderer(basetemplates.T2_4MDetailsDefaultRenderer):
                     summary['field'][field_id]['flagged'], summary['field'][field_id]['total'])
         return total
 
+class T2_4MDetailsaoflaggerRenderer(basetemplates.T2_4MDetailsDefaultRenderer):
+    def __init__(self, uri='aoflagger.mako', description='Aoflagger summary',
+                 always_rerender=False):
+        super().__init__(uri=uri, description=description, always_rerender=always_rerender)
+
+    def get_display_context(self, context, results):
+        ctx = super().get_display_context(context, results)
+
+        weblog_dir = os.path.join(context.report_dir, 'stage%s' % results.stage_number)
+
+        flag_totals = {}
+        for r in results:
+            if r.summaries:
+                flag_totals = utils.dict_merge(flag_totals,
+                                               self.flags_for_result(r, context))
+
+        summary_plots = {}
+        percentagemap_plots = {}
+        dataselect = {}
+
+        for result in results:
+
+            ms = os.path.basename(result.inputs['vis'])
+            if 'plotms_dataselect' in result.vis_averaged:
+                plotms_dataselect = result.vis_averaged['plotms_dataselect']
+            else:
+                plotms_dataselect = {}
+
+            plots = []
+            if 'before' in result.vis_averaged:
+                plotter = displaycheckflag.aoflaggerSummaryChart(context, result,
+                                                                 suffix='before',
+                                                                 plotms_args=plotms_dataselect)
+                plots.extend(plotter.plot())
+            if 'after' in result.vis_averaged:
+                plotter = displaycheckflag.aoflaggerSummaryChart(context, result,
+                                                                 suffix='after',
+                                                                 plotms_args=plotms_dataselect)
+                plots.extend(plotter.plot())
+                plotter = displaycheckflag.aoflaggerSummaryChart(context, result,
+                                                                 suffix='after-autoscale', plotms_args=plotms_dataselect)
+                plots.extend(plotter.plot())
+
+            summary_plots[ms] = plots
+            percentagemap_plots[ms] = [p for p in percentagemap_plots[ms] if p is not None]
+
+            dataselect[ms] = result.dataselect
+
+        ctx.update({'flags': flag_totals,
+                    'agents': ['before', 'after'],
+                    'summary_plots': summary_plots,
+                    'dataselect': dataselect,
+                    'percentagemap_plots': percentagemap_plots,
+                    'dirname': weblog_dir})
+
+        return ctx
+
+    def flags_for_result(self, result, context):
+        ms = context.observing_run.get_ms(result.inputs['vis'])
+        summaries = result.summaries
+
+        by_antenna = self.flags_by_antenna(summaries)
+        by_spw = self.flags_by_spw(summaries)
+        by_field = self.flags_by_field(summaries)
+
+        return {ms.basename: {'by_antenna': by_antenna, 'by_spw': by_spw, 'by_field': by_field}}
+
+    @staticmethod
+    def flags_by_antenna(summaries):
+        total = collections.defaultdict(dict)
+        for summary in summaries:
+            for ant_id in summary['antenna']:
+                total[summary['name']][ant_id] = flagutils.FlagTotal(
+                    summary['antenna'][ant_id]['flagged'], summary['antenna'][ant_id]['total'])
+        return total
+
+    @staticmethod
+    def flags_by_spw(summaries):
+        total = collections.defaultdict(dict)
+        for summary in summaries:
+            for spw_id in summary['spw']:
+                total[summary['name']][spw_id] = flagutils.FlagTotal(
+                    summary['spw'][spw_id]['flagged'], summary['spw'][spw_id]['total'])
+        return total
+
+    @staticmethod
+    def flags_by_field(summaries):
+        total = collections.defaultdict(dict)
+        for summary in summaries:
+            for field_id in summary['field']:
+                total[summary['name']][field_id] = flagutils.FlagTotal(
+                    summary['field'][field_id]['flagged'], summary['field'][field_id]['total'])
+        return total
 
 class T2_4MDetailsFlagtargetsdataRenderer(basetemplates.T2_4MDetailsDefaultRenderer):
     def __init__(self, uri='flagtargetsdata.mako',

@@ -26,7 +26,7 @@ qaadapter.registry.register_to_dataset_topic(flagdetervla.FlagDeterVLAResults)
 weblog.add_renderer(FlagDeterVLA, renderer.T2_4MDetailsFlagDeterVLARenderer(), group_by=weblog.UNGROUPED)
 
 weblog.add_renderer(Checkflag, renderer.T2_4MDetailscheckflagRenderer(), group_by=weblog.UNGROUPED)
-weblog.add_renderer(Aoflagger, renderer.T2_4MDetailscheckflagRenderer(), group_by=weblog.UNGROUPED)
+weblog.add_renderer(Aoflagger, renderer.T2_4MDetailsaoflaggerRenderer(), group_by=weblog.UNGROUPED)
 weblog.add_renderer(Targetflag,
                     basetemplates.T2_4MDetailsDefaultRenderer(uri='vlatargetflag.mako', description='Targetflag'),
                     group_by=weblog.UNGROUPED)

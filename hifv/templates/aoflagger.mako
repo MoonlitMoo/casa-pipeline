@@ -44,7 +44,7 @@ for ms in summary_plots:
 %endif
 
 
-% if result[0].inputs['checkflagmode'] in ( 'primary', 'secondary', 'science', 'primary-corrected', 'secondary-corrected', 'science-corrected'):
+% if result[0].inputs['flag_target'] in ( 'primary', 'secondary', 'science', 'primary-corrected', 'secondary-corrected', 'science-corrected'):
 
 <%
 
@@ -74,20 +74,18 @@ def percent_flagged_diff(flagsummary1, flagsummary2):
 
 % for ms in flags.keys():
 
-<h3 id="flagged_data_summary" class="jumptarget">Checkflag Summary</h3>
+<h3 id="flagged_data_summary" class="jumptarget">Aoflagger Summary</h3>
 
 <h4>${os.path.basename(ms)}</h4>
 
-% if result[0].inputs['checkflagmode'] in ( 'bpd-vla', 'allcals-vla', 'target-vla'):
-    <p>Summary Data Selection Parameter(s)</p>
-    <ul>
-        % for key, value in dataselect[ms].items():
-            % if value!='':
-                <li> ${key}: ${repr(utils.find_ranges(value))}
-            %endif
-        % endfor
-    </ul>
-%endif
+<p>Summary Data Selection Parameter(s)</p>
+<ul>
+    % for key, value in dataselect[ms].items():
+        % if value!='':
+            <li> ${key}: ${repr(utils.find_ranges(value))}
+        %endif
+    % endfor
+</ul>
 
 <table style="float: left; margin:0 10px; width: auto; text-align:center" class="table table-bordered table-striped table-hover">
 	<caption></caption>
