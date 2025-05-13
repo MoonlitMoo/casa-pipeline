@@ -56,7 +56,7 @@ class AoflaggerResults(basetask.Results):
         self.dataselect = dataselect
 
     def __repr__(self):
-        s = 'Checkflag (rflag mode) results:\n'
+        s = 'Aoflagger results:\n'
         for job in self.jobs:
             s += '%s performed. Statistics to follow?' % str(job)
         return s
@@ -102,13 +102,13 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
         # PIPE-1335: abort if both fieldselect and scanselect are empty strings.
         if not (fieldselect or scanselect):
-            LOG.warning("No scans with selected intent(s) from checkflagmode={!r}. RFI flagging not executed.".format(
+            LOG.warning("No scans with selected intent(s) from flag_target={!r}. RFI flagging not executed.".format(
                 self.inputs.flag_target))
             return AoflaggerResults(summaries=summaries)
 
         # abort if the data selection criteria lead to NUll selection
         if not mssel_valid(self.inputs.vis, field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws):
-            LOG.warning("Null data selection from checkflagmode={!r}. RFI flagging not executed.".format(
+            LOG.warning("Null data selection from flag_target={!r}. RFI flagging not executed.".format(
                 self.inputs.flag_target))
             return AoflaggerResults(summaries=summaries)
 
@@ -178,7 +178,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
         """Do RFI flagging using multiple passes of rflag/tfcrop/extend."""
 
         if datacolumn == 'CORRECTED_DATA':
-            LOG.info("UV subtracting vis as datacolumn is corrected")
+            LOG.info("UV subtracting vis datacolumn is corrected and we want to run on the residuals")
             job = casa_tasks.uvsub({'vis': self.inputs.vis})
             self._executor.execute(job)
         cmd = f"aoflagger -fields {fieldselect} -column {datacolumn} -strategy {self.inputs.aoflagger_file} {self.inputs.vis}"
@@ -188,10 +188,22 @@ class Aoflagger(basetask.StandardTaskTemplate):
         LOG.info(f"Finished with exit code {result}")
 
         if datacolumn == 'CORRECTED_DATA':
-            LOG.info("Reversing UV subtraction on vis as datacolumn was corrected")
+            LOG.info("Reversing UV subtraction on vis")
             job = casa_tasks.uvsub({'vis': self.inputs.vis, 'reverse': True})
             self._executor.execute(job)
-        return
+
+        # Remove the flag version if it already exists
+        job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='list')
+        result = self._executor.execute(job)
+        flag_versions = {v['name'] for k, v in result.items() if k != "MS"}
+        if self.inputs.flag_target in flag_versions:
+            LOG.info(f"Removing old flag version {self.inputs.flag_version}")
+            job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='delete', versionname=self.inputs.flag_target)
+            self._executor.execute(job)
+        # Save current flag state
+        LOG.info(f"Saving current flag state as {self.inputs.flag_target}")
+        job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='save', versionname=self.inputs.flag_target)
+        self._executor.execute(job)
 
     def _select_data(self):
         """Selects data according to the specified checkflagmode.
@@ -232,7 +244,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
             scanselect = ','.join(map(str, sorted(testpbd_scans)))
 
         # Select all calibrators excluding BPD calibrators
-        if self.inputs.flag_target in ('primary-corrected', 'secondary-corrected'):
+        if self.inputs.flag_target in ('secondary', 'secondary-corrected'):
             if msinfo.testgainscans:
                 testpbd_scans = {
                     s.id for s in ms.get_scans(
