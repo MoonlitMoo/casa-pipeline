@@ -221,7 +221,6 @@ class T2_4MDetailsaoflaggerRenderer(basetemplates.T2_4MDetailsDefaultRenderer):
                                                self.flags_for_result(r, context))
 
         summary_plots = {}
-        percentagemap_plots = {}
         dataselect = {}
 
         for result in results:
@@ -248,7 +247,6 @@ class T2_4MDetailsaoflaggerRenderer(basetemplates.T2_4MDetailsDefaultRenderer):
                 plots.extend(plotter.plot())
 
             summary_plots[ms] = plots
-            percentagemap_plots[ms] = [p for p in percentagemap_plots[ms] if p is not None]
 
             dataselect[ms] = result.dataselect
 
@@ -256,7 +254,7 @@ class T2_4MDetailsaoflaggerRenderer(basetemplates.T2_4MDetailsDefaultRenderer):
                     'agents': ['before', 'after'],
                     'summary_plots': summary_plots,
                     'dataselect': dataselect,
-                    'percentagemap_plots': percentagemap_plots,
+                    'percentagemap_plots': {},
                     'dirname': weblog_dir})
 
         return ctx

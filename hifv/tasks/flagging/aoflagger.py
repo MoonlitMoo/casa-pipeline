@@ -121,19 +121,16 @@ class Aoflagger(basetask.StandardTaskTemplate):
             summaries.append(summarydict)
 
         # PIPE-502/995/987: save before-flagging time-averged MS and its amp-related stats for weblog
-        if self.inputs.flag_target in ('allcals-vla', 'bpd-vla', 'target-vla',
-                                         'bpd', 'allcals',
-                                         'bpd-vlass', 'allcals-vlass', 'vlass-imaging'):
-            vis_averaged_before, vis_ampstats_before = self._create_timeavg_ms(suffix='before')
-            vis_averaged.update(before=vis_averaged_before, before_amp=vis_ampstats_before)
-            plotms_dataselect = {'field':  fieldselect,
-                                 'scan': scanselect,
-                                 'spw': self.sci_spws,
-                                 'intent': intentselect,
-                                 'ydatacolumn': 'data',
-                                 'correlation': self.corrstring}
-            vis_averaged['plotms_dataselect'] = plotms_dataselect
-            # plots['before'] = self._create_summaryplots(suffix='before', plotms_args=plot_selectdata)
+
+        vis_averaged_before, vis_ampstats_before = self._create_timeavg_ms(suffix='before')
+        vis_averaged.update(before=vis_averaged_before, before_amp=vis_ampstats_before)
+        plotms_dataselect = {'field':  fieldselect,
+                             'scan': scanselect,
+                             'spw': self.sci_spws,
+                             'intent': intentselect,
+                             'ydatacolumn': 'data',
+                             'correlation': self.corrstring}
+        vis_averaged['plotms_dataselect'] = plotms_dataselect
 
         # PIPE-987: backup flagversion before rfi flagging
         now_str = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
@@ -276,7 +273,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
     def _create_timeavg_ms(self, suffix='before'):
 
         stage_number = self.inputs.context.task_counter
-        vis_averaged_name = [self.inputs.vis, 'hifv_checkflag', 's' + str(stage_number),
+        vis_averaged_name = [self.inputs.vis, 'hifv_aoflagger', 's' + str(stage_number),
                              suffix, self.inputs.flag_target, 'averaged']
         vis_averaged_name = '.'.join(list(filter(None, vis_averaged_name)))
 
@@ -284,7 +281,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
         LOG.debug('Estimating the amplitude range of unflagged averaged data for {} : {}'.format(vis_averaged_name, suffix))
 
         # do cross-scan averging for calibrator checkflagmodes
-        if self.inputs.flag_target in ('target-vla', 'vlass-imaging'):
+        if self.inputs.flag_target in ('science'):
             timespan = ''
         else:
             timespan = 'scan'
