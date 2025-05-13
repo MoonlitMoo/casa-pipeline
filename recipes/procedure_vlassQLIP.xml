@@ -1,0 +1,123 @@
+<ProcessingProcedure>
+
+    <ProcedureTitle>hifv_vlassQLIP</ProcedureTitle>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_importdata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">nocopy</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_editimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">parameter_file</Keyword>
+                <Value xmlns="">QLIP_parameter.list</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_transformimagedata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">datacolumn</Keyword>
+                <Value xmlns="">corrected</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">clear_pointing</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">modify_weights</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">hm_cleaning</Keyword>
+                <Value xmlns="">manual</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">hm_masking</Keyword>
+                <Value xmlns="">none</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_pbcor</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makermsimages</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makecutoutimages</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_flagdata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">quack</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">edgespw</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">clip</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">scan</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">autocorr</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">hm_tbuff</Keyword>
+                <Value xmlns="">manual</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">template</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">online</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">baseband</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_exportvlassdata</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+</ProcessingProcedure>

@@ -1,0 +1,35 @@
+Frequency(MHz)	   SEFD(Jy) 
+277	7306.00
+293	4255.14
+309	3484.40
+325	2828.73
+341	2664.97
+357	2529.00
+373	2476.31
+389	2789.93
+405	4812.13
+421	3474.18
+437	3793.50
+453	4706.75
+469	5339.00
+485	10597.71
+
+# <receiver band="EVLA_P">
+# <entry MHz="277" tSys="169" antEff="0.13"/>
+# <entry MHz="293" tSys="159" antEff="0.21"/>
+# <entry MHz="309" tSys="155" antEff="0.25"/>
+# <entry MHz="325" tSys="151" antEff="0.30"/>
+# <entry MHz="341" tSys="147" antEff="0.31"/>
+# <entry MHz="357" tSys="144" antEff="0.32"/>
+# <entry MHz="373" tSys="141" antEff="0.32"/>
+# <entry MHz="389" tSys="139" antEff="0.28"/>
+# <entry MHz="405" tSys="137" antEff="0.16"/>
+# <entry MHz="421" tSys="136" antEff="0.22"/>
+# <entry MHz="437" tSys="135" antEff="0.20"/>
+# <entry MHz="453" tSys="134" antEff="0.16"/>
+# <entry MHz="469" tSys="133" antEff="0.14"/>
+# <entry MHz="485" tSys="132" antEff="0.07"/>
+# </receiver>
+#
+# To convert to SEFD in Jy, use SEFD= 5.62 x Tsys/antEff
+#

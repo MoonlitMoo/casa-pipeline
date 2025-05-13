@@ -1,0 +1,11 @@
+Frequency(MHz)	   SEFD(Jy) 
+70 50018.00
+82 50018.00
+
+# <receiver band="EVLA_4">
+# <entry MHz="70" tSys="1780" antEff="0.20"/>
+# <entry MHz="82" tSys="1780" antEff="0.20"/>
+# </receiver>
+#
+# To convert to SEFD in Jy, use SEFD= 5.62 x Tsys/antEff
+#

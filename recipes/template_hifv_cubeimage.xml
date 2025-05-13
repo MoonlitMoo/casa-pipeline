@@ -1,0 +1,369 @@
+<ProcessingProcedure>
+
+    <ProcedureTitle>hifv_cubeimage</ProcedureTitle>
+
+    {{#importonly}}
+    <!-- import MS: if importonly=True, no calibration shall be performed -->
+    <ProcessingCommand>
+        <Command xmlns="">hifv_importdata</Command>
+        <ParameterSet>
+          <Parameter>
+            <Keyword xmlns="">datacolumns</Keyword>
+            <Value xmlns="">{'data':'raw','corrected':'regcal_contline_all'}</Value>
+          </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+    <!-- end of import MS-->
+    {{/importonly}}
+
+    {{^importonly}}
+    <!-- Restore MS: if importonly!=True, restore ASDM -->
+    <ProcessingCommand>
+        <Command xmlns="">hifv_restoredata</Command>
+        <ParameterSet>
+          <Parameter>
+            <Keyword xmlns="">copytoraw</Keyword>
+            <Value xmlns="">False</Value>
+          </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_statwt</Command>
+        <ParameterSet/>
+    </ProcessingCommand>
+
+
+    <!-- End of Restore MS-->
+    {{/importonly}}
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_mstransform</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{field}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_flagtargetsdata</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    {{#cube_image}}
+    <!-- create continumm-free data if cube_image=true -->
+    <ProcessingCommand>
+        <Command xmlns="">hif_checkproductsize</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maxcubesize</Keyword>
+                <Value xmlns="">20.0</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">maxcubelimit</Keyword>
+                <Value xmlns="">40.0</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">maxproductsize</Keyword>
+                <Value xmlns="">100.0</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">specmode</Keyword>
+                <Value xmlns="">mfs</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field_list}}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_findcont</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_uvcontsub</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field_list}}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- end of the continuum subtraction section -->
+    {{/cube_image}}
+
+
+    {{#cube_image}}
+    <!-- loop over list of cubes and create images -->
+    {{#cube_list}}
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_editimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">imaging_mode</Keyword>
+                <Value xmlns="">VLA</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">specmode</Keyword>
+                <Value xmlns="">cube</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">editmode</Keyword>
+                <Value xmlns="">replace</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field}}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">spw</Keyword>
+                <Value xmlns="">{{spw}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">restfreq</Keyword>
+                <Value xmlns="">{{restfreq}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">start</Keyword>
+                <Value xmlns="">{{start}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">width</Keyword>
+                <Value xmlns="">{{width}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">nbin</Keyword>
+                <Value xmlns="">-1</Value>
+            </Parameter>            
+            <Parameter>
+                <Keyword xmlns="">nchan</Keyword>
+                <Value xmlns="">{{nchan}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+          <Parameter>
+            <Keyword xmlns="">overwrite_on_export</Keyword>
+            <Value xmlns="">False</Value>
+          </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    {{/cube_list}}
+    <!-- end loop -->
+    {{/cube_image}}
+
+    {{#cont_image}}
+    <!-- create aggregate continuum image if cont_image=true -->
+    <ProcessingCommand>
+        <Command xmlns="">hif_checkproductsize</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maximsize</Keyword>
+                <Value xmlns="">16384</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">specmode</Keyword>
+                <Value xmlns="">cont</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field_list}}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">hm_cyclefactor</Keyword>
+                <Value xmlns="">3.0</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- end of the continuum imaging section -->
+    {{/cont_image}}
+
+    {{#selfcal}}
+    <!-- run selfcal and save selfcal'ed data in 'corrected' if selfcal=true -->
+    
+    <ProcessingCommand>
+        <Command xmlns="">hif_selfcal</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">recal</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field_list}}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    {{#cont_image}}
+    <!-- create aggregate continuum image if cont_image=true -->
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">specmode</Keyword>
+                <Value xmlns="">cont</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field_list}}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">datatype</Keyword>
+                <Value xmlns="">selfcal</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">hm_cyclefactor</Keyword>
+                <Value xmlns="">3.0</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- end of the continuum imaging section -->
+    {{/cont_image}}
+
+    {{#cube_image}}
+    <ProcessingCommand>
+        <Command xmlns="">hif_checkproductsize</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maxcubesize</Keyword>
+                <Value xmlns="">20.0</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">maxcubelimit</Keyword>
+                <Value xmlns="">40.0</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">maxproductsize</Keyword>
+                <Value xmlns="">100.0</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>   
+    <!-- loop over list of cubes and create images -->
+    {{#cube_list}}
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_editimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">imaging_mode</Keyword>
+                <Value xmlns="">VLA</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">specmode</Keyword>
+                <Value xmlns="">cube</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">editmode</Keyword>
+                <Value xmlns="">replace</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{{field}}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">spw</Keyword>
+                <Value xmlns="">{{spw}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">restfreq</Keyword>
+                <Value xmlns="">{{restfreq}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">start</Keyword>
+                <Value xmlns="">{{start}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">width</Keyword>
+                <Value xmlns="">{{width}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">nbin</Keyword>
+                <Value xmlns="">-1</Value>
+            </Parameter>            
+            <Parameter>
+                <Keyword xmlns="">nchan</Keyword>
+                <Value xmlns="">{{nchan}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">datatype</Keyword>
+                <Value xmlns="">selfcal</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+          <Parameter>
+            <Keyword xmlns="">overwrite_on_export</Keyword>
+            <Value xmlns="">False</Value>
+          </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    {{/cube_list}}
+    <!-- end loop -->
+    {{/cube_image}}
+    <!-- end of the selfcal section -->
+    {{/selfcal}}
+
+    {{#cont_image}}
+    <ProcessingCommand>
+        <Command xmlns="">hifv_pbcor</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>    
+    {{/cont_image}}
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_exportdata</Command>
+        <ParameterSet>
+          <Parameter>
+            <Keyword xmlns="">imaging_products_only</Keyword>
+            <Value xmlns="">True</Value>
+          </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+</ProcessingProcedure>

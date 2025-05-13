@@ -1,0 +1,63 @@
+<ProcessingProcedure>
+
+    <ProcedureTitle>test_hifv_cubeimage</ProcedureTitle>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_importdata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">datacolumns</Keyword>
+                <Value xmlns="">{'data':'regcal_line_science'}</Value>
+            </Parameter>            
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_checkproductsize</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maxproductsize</Keyword>
+                <Value xmlns="">100.0</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">maxcubesize</Keyword>
+                <Value xmlns="">20.0</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">maxcubelimit</Keyword>
+                <Value xmlns="">40.0</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimlist</Command>
+        <!-- Needs updates for VLA to not use deconvolver='mtmfs'-->
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">specmode</Keyword>
+                <Value xmlns="">cube</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_pbcor</Command> 
+        <!-- delibrately excluded ?-->
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>    
+    
+    <ProcessingCommand>
+        <Command xmlns="">hifv_exportdata</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+</ProcessingProcedure>

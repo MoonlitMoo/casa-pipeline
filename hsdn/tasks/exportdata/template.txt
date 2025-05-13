@@ -1,0 +1,262 @@
+#### User setting parameters ################
+
+## Product Overwrite Flag --
+Overwrite_Products = False
+
+## Stage Excecution Flag --
+Do_BaselineSubtraction = True
+Do_MakeImages = True
+Apply_Flags = True            # whther or not applying final flag
+
+## working directory --
+working_directory = '../rebase/'
+
+## prefix --
+outputfile_prefix = None        # default prefix is input MS name
+
+## MS name
+ms_name = '${vis}'
+
+## SPW_IDs --
+SPW_IDs = [
+${processspw}
+            ]
+
+## Fitting parameters --
+baseline_ranges  = [
+${baselinerange}
+                    ]
+
+blfunc             = 'poly'    #  baseline model function
+clipthresh         =  3.0      #  clipping threshold for iterative fitting
+clipniter          =  0        #  maximum iteration number for iterative fitting
+## subparameter for 'poly'
+order              =  3        #  order of baseline model function
+## subparameter for 'cspline'
+npiece             =  2        #  number of element polynomials for cubic spline curve
+## subparameters for 'sinusoid'
+applyfft           =  True     #  automatically set wave numbers of sinusoids ('sinusoid')
+fftmethod          =  "fft"    #  method for automatically set wave numbers of sinusoids ["fft"]
+fftthresh          =  3.0      #  threshold to select wave numbers of sinusoids
+addwn              =  [0]      #  additional wave numbers to use
+rejwn              =  []       #  wave numbers NOT to use
+
+
+
+## Image parameters --
+rest_frequencies = [
+${restfreqs}
+                    ]
+
+mode = 'channel'
+veltype = 'radio'
+outframe = 'LSRK'
+
+nchan = ${nchan}
+start = 0
+width = 1
+
+cell = ${cell}
+phasecenter = ${phasecenter}
+imsize = ${imsize}
+
+gridfunction = 'SF'
+convsupport = ${convsupport}
+truncate = -1
+gwidth = -1
+jwidth = -1
+
+
+##############################################
+
+import os
+import shutil
+import casatools
+
+
+# function to re-evaluate image mask for combined image
+def update_mask(image, weightimage):
+    # image analysis tool
+    ia = casatools.image()
+
+    # safe path to the image
+    #   - escape colon which has special meaning in LEL
+    def get_safe_path(path):
+        p = path.replace(':', '\:') if ':' in path else path
+        return p
+
+    # replace NaNs in masked pixels
+    try:
+        ia.open(image)
+
+        # save default mask name
+        default_mask = ia.maskhandler('default')[0]
+
+        # create mask for NaN pixels
+        nan_mask = 'nan'
+        ia.calcmask('!ISNAN("{}")'.format(get_safe_path(ia.name())), name=nan_mask, asdefault=True)
+        stat = ia.statistics()
+        shape = ia.shape()
+
+        # replacemaskedpixels fails if all pixels are valid
+        if len(stat['npts']) > 0 and shape.prod() > stat['npts'][0]:
+            ia.replacemaskedpixels(0.0, update=False)
+
+        # restore default mask and delete tempral NaN mask
+        ia.maskhandler('set', default_mask)
+        ia.maskhandler('delete', nan_mask)
+    finally:
+        ia.close()
+
+    # evaluate threshold for weight image
+    minweight = 0.1
+    try:
+        ia.open(weightimage)
+        # exclude 0 (and negative weights)
+        ia.calcmask('"{}" > 0.0'.format(get_safe_path(ia.name())), name='nonzero')
+        stat = ia.statistics(robust=True)
+        median_weight = stat['median']
+    finally:
+        ia.close()
+
+    # re-evaluate mask
+    threshold = minweight * median_weight[0]
+    for imagename in [image, weightimage]:
+        try:
+            ia.open(imagename)
+
+            # new mask name
+            updated_mask = 'mask_combine'
+
+            # calculate mask from weight image
+            ia.calcmask('"{}" >= {}'.format(get_safe_path(weightimage), threshold),
+                        name=updated_mask,
+                        asdefault=True)
+
+            # remove non-default masks
+            masks = ia.maskhandler('get')
+            masks.pop(masks.index(updated_mask))
+            if len(masks) > 0:
+                ia.maskhandler('delete', masks)
+        finally:
+            ia.close()
+
+
+if not os.path.exists(working_directory):
+    os.mkdir(working_directory)
+
+# Start post-restore processing
+infile = ms_name
+
+# Define output filenames --
+if outputfile_prefix is None or len(outputfile_prefix) == 0:
+    baseline_outputfile = os.path.basename(infile.rstrip('/')) + '_bl'
+    baseline_paramfile = os.path.basename(infile.rstrip('/')) + '_blparam.txt'
+else:
+    baseline_outputfile = '{}.ms_bl'.format(outputfile_prefix)
+    baseline_paramfile = '{}_blparam.txt'.format(outputfile_prefix)
+baseline_outputfile = os.path.join(working_directory, baseline_outputfile)
+baseline_paramfile = os.path.join(working_directory, baseline_paramfile)
+
+# spw parameter
+spw = ','.join([':'.join([x for x in map(str, [i,b]) if len(x) > 0]) for i,(f,b) in enumerate(zip(SPW_IDs, baseline_ranges)) if f is True])
+
+# Do basefit
+if Do_BaselineSubtraction:
+    sdbaseline(
+        infile=infile,
+        spw=spw,
+        datacolumn='corrected',
+        blmode='fit',
+        dosubtract=True,
+        blformat='text',
+        bloutput=baseline_paramfile,
+        outfile=baseline_outputfile,
+        showprogress=True,
+        overwrite=Overwrite_Products,
+        blfunc=blfunc,
+        order=order,
+        npiece=npiece,
+        applyfft=applyfft,
+        fftmethod=fftmethod,
+        fftthresh=fftthresh,
+        addwn=addwn,
+        rejwn=rejwn,
+        clipthresh=clipthresh,
+        clipniter=clipniter
+        )
+else:
+    baseline_outputfile = infile
+
+
+# Apply Flags
+if Apply_Flags:
+    pass
+
+
+# Making Images
+if Do_MakeImages:
+    antennalist = ${antennalist}    # list of antennas (=list of beams)
+
+    for spwID, flag in enumerate(SPW_IDs):
+        if flag == True:
+            _prefix = os.path.join(working_directory, '${source}')
+            beamimagefiles = ['{}.NRO-BEAM{}.spw{}.I.sd.im'.format(_prefix, a, spwID) for a in antennalist]
+            for antenna in antennalist:
+                sdimaging(
+                    infiles=baseline_outputfile,
+                    outfile = beamimagefiles[antenna],
+                    field='0',
+                    spw='{}'.format(spwID),
+                    antenna='{}'.format(antenna),
+                    intent='OBSERVE_TARGET#ON_SOURCE',
+                    mode=mode, outframe=outframe, veltype=veltype,
+                    nchan=nchan, start=start, width=width,
+                    gridfunction=gridfunction, convsupport=convsupport,
+                    truncate=truncate, gwidth=gwidth, jwidth=jwidth,
+                    imsize=imsize,
+                    cell=cell,
+                    phasecenter=phasecenter,
+                    restfreq=rest_frequencies[spwID],
+                    stokes='I',
+                    overwrite=Overwrite_Products,
+                    brightnessunit='K'
+                    )
+
+            weightimage = '{}.spw{}.I.sd.im.weight'.format(_prefix, spwID)
+
+            # overwrite weight image if desired
+            if Overwrite_Products is True and os.path.exists(weightimage):
+                shutil.rmtree(weightimage)
+
+            validimages = [_name for _name in beamimagefiles if os.path.exists(_name)]
+            num_images = len(validimages)
+            weightimages = ['{}.weight'.format(s) for s in validimages]
+
+            # wexpr will be just a sum of images, e.g. "IM0+IM1+IM2+IM3"
+            wexpr = '+'.join(['IM{}'.format(x) for x in range(num_images)])
+            immath(imagename=weightimages,
+                mode='evalexpr',
+                outfile=weightimage,
+                expr=wexpr
+                )
+
+            imagename = validimages + weightimages + [weightimage]
+            outputimage = '{}.spw{}.I.sd.im'.format(_prefix, spwID)
+
+            # overwrite combined image if desired
+            if Overwrite_Products is True and os.path.exists(outputimage):
+                shutil.rmtree(outputimage)
+
+            # cexpr will be weighted sum of images, e.g. "(IM0*IM4+IM1*IM5+IM2*IM6+IM3+IM7)/IM8"
+            cexpr = '(' + '+'.join(['IM{}*IM{}'.format(x, x+num_images) for x in range(num_images)]) + ')/IM{}'.format(2 * num_images)
+
+            immath(
+                imagename=imagename,
+                mode='evalexpr',
+                outfile=outputimage,
+                expr=cexpr
+                )
+
+            # update image mask
+            update_mask(outputimage, weightimage)

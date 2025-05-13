@@ -1,0 +1,71 @@
+<ProcessingProcedure>
+
+	<ProcedureTitle>hifa_deliver_ms</ProcedureTitle>
+
+    <!-- import MS: if importonly=True, no calibration shall be performed -->
+    {{#importonly}}
+    <ProcessingCommand>
+        <Command xmlns="">hifa_importdata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">datacolumns</Keyword>
+                <Value xmlns="">{'data':'raw','corrected':'regcal_contline_all'}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- If onlineflag=True, online flag shall be applied to the imported MSes. -->
+    {{#onlineflag}}
+    <ProcessingCommand>
+        <Command xmlns="">hifa_flagdata</Command>
+        <ParameterSet/>
+    </ProcessingCommand>
+    {{/onlineflag}}
+    {{/importonly}}
+    {{^importonly}}
+    <ProcessingCommand>
+        <Command xmlns="">hifa_restoredata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">copytoraw</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+    {{/importonly}}
+
+    <!-- if mstransform=True, data selection, time and/or spectral averaging shall be performed -->
+    {{#mstransform}}
+    <ProcessingCommand>
+        <Command xmlns="">hif_mstransform</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">chanbin</Keyword>
+                <Value xmlns="">{{chanbin}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">timebin</Keyword>
+                <Value xmlns="">{{timebin}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">intent</Keyword>
+                <Value xmlns="">{{intent}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns="">{{field}}</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">spw</Keyword>
+                <Value xmlns="">{{spw}}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+    {{/mstransform}}
+
+    <ProcessingCommand>
+        <Command xmlns="">hifa_exportdata</Command>
+        <ParameterSet/>
+    </ProcessingCommand>
+
+</ProcessingProcedure>

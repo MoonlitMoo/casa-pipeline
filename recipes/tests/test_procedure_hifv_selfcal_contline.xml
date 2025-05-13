@@ -1,0 +1,43 @@
+<ProcessingProcedure>
+
+    <ProcedureTitle>test_hifv_selfcal</ProcedureTitle>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_importdata</Command>
+        <ParameterSet>
+            <Parameter>
+              <Keyword xmlns="">datacolumns</Keyword>
+              <Value xmlns="">{'data':'regcal_contline_science'}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_checkproductsize</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maximsize</Keyword>
+                <Value xmlns="">16384</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+    
+    <ProcessingCommand>
+        <Command xmlns="">hif_selfcal</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns=""></Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">amplitude_selfcal</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">allow_wproject</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>                                       
+        </ParameterSet>
+    </ProcessingCommand>
+
+</ProcessingProcedure>

@@ -1,0 +1,197 @@
+<ProcessingProcedure>
+
+    <ProcedureTitle>hifv_vlassSEIP</ProcedureTitle>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_importdata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">nocopy</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_editimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">parameter_file</Keyword>
+                <Value xmlns="">SEIP_parameter.list</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_transformimagedata</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">datacolumn</Keyword>
+                <Value xmlns="">data</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">clear_pointing</Keyword>
+                <Value xmlns="">False</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">modify_weights</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">wtmode</Keyword>
+                <Value xmlns="">nyq</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- Tier-1 (Quick Look) mask -->
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_vlassmasking</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maskingmode</Keyword>
+                <Value xmlns="">vlass-se-tier-1</Value>
+            </Parameter>
+            <Parameter>
+                <Keyword xmlns="">vlass_ql_database</Keyword>
+                <Value xmlns="">/home/vlass/packages/VLASS1Q.fits</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- Image for self-calibration -->
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">hm_masking</Keyword>
+                <Value xmlns="">manual</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- Self calibration -->
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_checkflag</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">checkflagmode</Keyword>
+                <Value xmlns="">vlass-imaging</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_statwt</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">statwtmode</Keyword>
+                <Value xmlns="">VLASS-SE</Value>
+            </Parameter>
+            <Parameter xmlns="">
+                <Keyword xmlns="">datacolumn</Keyword>
+                <Value xmlns="">residual_data</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_selfcal</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">selfcalmode</Keyword>
+                <Value xmlns="">VLASS-SE</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- Image selfcal-ed visibilities for Tier-2 mask-->
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_editimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">parameter_file</Keyword>
+                <Value xmlns="">SEIP_parameter.list</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">hm_masking</Keyword>
+                <Value xmlns="">manual</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- Create tier-2 mask and compute final image -->
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_editimlist</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">parameter_file</Keyword>
+                <Value xmlns="">SEIP_parameter.list</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_vlassmasking</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">maskingmode</Keyword>
+                <Value xmlns="">vlass-se-tier-2</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makeimages</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">hm_masking</Keyword>
+                <Value xmlns="">manual</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_pbcor</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makermsimages</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_makecutoutimages</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <ProcessingCommand>
+        <Command xmlns="">hif_analyzealpha</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- Finish recipe, export results -->
+
+    <ProcessingCommand>
+        <Command xmlns="">hifv_exportvlassdata</Command>
+        <ParameterSet>
+        </ParameterSet>
+    </ProcessingCommand>
+
+</ProcessingProcedure>

@@ -1,0 +1,34 @@
+<ProcessingProcedure>
+	<ProcedureTitle>test_hifa_selfcal</ProcedureTitle>
+
+    <!-- import MS: if importonly=True, no calibration shall be performed -->
+    <ProcessingCommand>
+        <Command xmlns="">hifa_importdata</Command>
+        <ParameterSet>
+            <Parameter>
+              <Keyword xmlns="">datacolumns</Keyword>
+              <Value xmlns="">{'data':'regcal_contline_science'}</Value>
+            </Parameter>
+        </ParameterSet>
+    </ProcessingCommand>
+    <!-- end of import MS-->
+
+    <!-- run selfcal and save selfcal'ed data in 'corrected' if selfcal=true -->
+    
+    <ProcessingCommand>
+        <Command xmlns="">hif_selfcal</Command>
+        <ParameterSet>
+            <Parameter>
+                <Keyword xmlns="">field</Keyword>
+                <Value xmlns=""></Value>
+            </Parameter>     
+            <Parameter>
+                <Keyword xmlns="">amplitude_selfcal</Keyword>
+                <Value xmlns="">True</Value>
+            </Parameter>                   
+        </ParameterSet>
+    </ProcessingCommand>
+
+    <!-- end of the selfcal section -->
+
+</ProcessingProcedure>

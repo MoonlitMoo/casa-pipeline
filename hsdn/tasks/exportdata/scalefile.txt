@@ -1,0 +1,45 @@
+# This is a template file for scaling correction used in hsdn_restoredata task of CASA pipeline.
+# If this file is not given, the scaling correction is skipped.
+# This file consists of two parts: "1. Meta Data" and "2. Scaling Factors".
+#
+#
+# 1. Meta Data:
+#  The following parameters can be used to record the origin of the scaling factors given in this file (Blanks are allowed).
+#  The provided values are displayed in the weblog detail page of hsdn_restoredata task. 
+#  - Keywords: (The formats of all the parameters are arbitrary and can be added new lines or items.)
+#   Telescope/Instrument: The names of the telescope and instruments used to obtain the data. (ex. NRO45m/FOREST)
+#   Data:                 The name or ID of the data used for estimate of the scaling factors. (ex. mg2-XXXXXXXXXXX-YYYYY.ms)
+#   ObjectName:           The name of the object to have been observed in the Data. (ex. Orion-KL)
+#   ObservationStart:     The date (and time) of the observation start for the data. (ex. 20101010T10:10:10)
+#   Software:             The software name (and the version) used for the processing of the data. (ex. CASA X.Y.Z with pipeline)
+#   ProcessStart:         The date (and time) of the data processing. (ex. 20101010T10:10:10)
+#   AuthorName:           Your name (first and last) or the author's name who have made the meta information. (ex. Akira Yoshino)
+#   FreeMemo:             Free space for other information.
+#---Fill below lines (Do not edit this line)---------------------------------------------------
+# Telescope/Instrument:
+# Data:
+# ObjectName:
+# ObservationStart:
+# Software:
+# ProcessStart: 
+# AuthorName:
+# Reference:
+# FreeMemo:
+#
+#---End (Do not edit this line)---------------------------------------------------------------
+#
+#
+# 2. Scaling Factors:
+#  Here, the scaling factors can be given for each MS, Beam, Spw, and Polarization in the CSV format.
+#  Do not change the order of the columns, i.e., MS,Beam,Spwid,Polarization,Factor.
+#  Also, do not add "#" at the beginning of the rows.
+#  In the following, the available combinations of the parameters are automatically set with default scaling factors of 1.0, 
+#  and you can simply update the "Factor" column with the scaling factors you would like to apply.
+#  - Keywords:
+#   MS:           The ID of measurement set data.
+#   Beam:         The ID of beam.
+#   Spwid:        The ID of spectral window.
+#   Polarization: The name of polarization; four cross correlation parameters, i.e., XX, YY, XY or YX.
+#   Factor:       The scaling factors. They are the reciprocal of the relative intensities compared to the standard value.
+#----------------------------------------------------------------------------------------------
+#MS,Beam,Spwid,Polarization,Factor
