@@ -179,7 +179,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
         if datacolumn == 'CORRECTED_DATA':
             LOG.info("UV subtracting vis datacolumn is corrected and we want to run on the residuals")
-            job = casa_tasks.uvsub({'vis': self.inputs.vis})
+            job = casa_tasks.uvsub(vis=self.inputs.vis)
             self._executor.execute(job)
         cmd = f"aoflagger -fields {fieldselect} -column {datacolumn} -strategy {self.inputs.aoflagger_file} {self.inputs.vis}"
 
@@ -189,7 +189,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
         if datacolumn == 'CORRECTED_DATA':
             LOG.info("Reversing UV subtraction on vis")
-            job = casa_tasks.uvsub({'vis': self.inputs.vis, 'reverse': True})
+            job = casa_tasks.uvsub(vis=self.inputs.vis, reverse=True)
             self._executor.execute(job)
 
         # Remove the flag version if it already exists
@@ -197,7 +197,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
         result = self._executor.execute(job)
         flag_versions = {v['name'] for k, v in result.items() if k != "MS"}
         if self.inputs.flag_target in flag_versions:
-            LOG.info(f"Removing old flag version {self.inputs.flag_version}")
+            LOG.info(f"Removing old flag version {self.inputs.flag_target}")
             job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='delete', versionname=self.inputs.flag_target)
             self._executor.execute(job)
         # Save current flag state

@@ -246,6 +246,11 @@ def uvcontsub(*v, **k) -> JobRequest:
 
 
 @register_task
+def uvsub(*v, **k) -> JobRequest:
+    return JobRequest(casatasks.uvsub, *v, **k)
+
+
+@register_task
 def wvrgcal(*v, **k) -> JobRequest:
     return JobRequest(almatasks.wvrgcal, *v, **k)
 

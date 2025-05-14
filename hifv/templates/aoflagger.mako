@@ -23,7 +23,7 @@ for ms in summary_plots:
                                   url_fn="${lambda ms:  'noop'}">
         
         <%def name="title()">
-            Calibrated amplitude vs Frequency
+            Amplitude vs Frequency
         </%def>
 
         <%def name="preamble()">
