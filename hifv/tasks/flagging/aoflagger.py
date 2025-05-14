@@ -23,13 +23,15 @@ class AoflaggerInputs(vdp.StandardInputs):
     processing_data_type = [DataType.REGCAL_CONTLINE_ALL, DataType.RAW]
 
     flag_target = vdp.VisDependentProperty(default='')
+    use_corrected = vdp.VisDependentProperty(default='')
     aoflagger_file = vdp.VisDependentProperty(default='')
 
-    def __init__(self, context, vis=None, flag_target=None, aoflagger_file=None):
+    def __init__(self, context, vis=None, flag_target=None, use_corrected=None, aoflagger_file=None):
         super(AoflaggerInputs, self).__init__()
         self.context = context
         self.vis = vis
         self.flag_target = flag_target
+        self.use_corrected = use_corrected
         self.aoflagger_file = aoflagger_file
 
 
@@ -71,14 +73,6 @@ class Aoflagger(basetask.StandardTaskTemplate):
         LOG.info(f"Aoflagger task: {self.inputs.flag_target}, using {self.inputs.aoflagger_file}")
 
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
-        self.tint = ms.get_vla_max_integration_time()
-
-        # a list of strings representing polarizations from science spws
-        sci_spwlist = ms.get_spectral_windows(science_windows_only=True)
-        sci_spwids = [spw.id for spw in sci_spwlist]
-        pols_list = [ms.polarizations[dd.pol_id].corr_type_string for dd in ms.data_descriptions if dd.spw.id in sci_spwids]
-        pols = [pol for pols in pols_list for pol in pols]
-        self.corr_type_string = list(set(pols))
 
         # a string representing selected polarizations, only parallel hands
         # this is only preserved to maintain the existing behavior of checkflagmode=''/'semi'
@@ -90,12 +84,9 @@ class Aoflagger(basetask.StandardTaskTemplate):
         summaries = []      # Flagging statistics summaries for VLA QA scoring (CAS-10910/10916/10921)
         vis_averaged = {}   # Time-averaged MS and stats for summary plots
 
-
-        # abort if the mode selection is not recognized
-        # NOTE: Removed vlass ones
-        if self.inputs.flag_target not in ('primary', 'secondary', 'science',
-                                           'primary-corrected', 'secondary-corrected', 'science-corrected'):
-            LOG.warning("Unrecognized option for flag_target. RFI flagging not executed.")
+        # abort if the field is not recognized
+        if self.inputs.flag_target not in ms.get_fields():
+            LOG.warning("Unrecognized field for flag_target. RFI flagging not executed.")
             return AoflaggerResults(summaries=summaries)
 
         fieldselect, scanselect, intentselect, columnselect = self._select_data()
@@ -112,8 +103,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
                 self.inputs.flag_target))
             return AoflaggerResults(summaries=summaries)
 
-        # PIPE-502/995: run the before-flagging summary in most checkflagmodes, including 'vlass-imaging'
-        # PIPE-757: skip in all VLASS calibration checkflagmodes: 'bpd-vlass', 'allcals-vlass', and 'target-vlass'
+        # Run before flagging summary
         job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='before',
                                   field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
         summarydict = self._executor.execute(job)
@@ -121,7 +111,6 @@ class Aoflagger(basetask.StandardTaskTemplate):
             summaries.append(summarydict)
 
         # PIPE-502/995/987: save before-flagging time-averged MS and its amp-related stats for weblog
-
         vis_averaged_before, vis_ampstats_before = self._create_timeavg_ms(suffix='before')
         vis_averaged.update(before=vis_averaged_before, before_amp=vis_ampstats_before)
         plotms_dataselect = {'field':  fieldselect,
@@ -137,18 +126,32 @@ class Aoflagger(basetask.StandardTaskTemplate):
         job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='save',
                                      versionname='hifv_aoflagger_{}_stage{}_{}'.format(
                                          self.inputs.flag_target, self.inputs.context.task_counter, now_str),
-                                     comment='flagversion before running hifv_aoflagger()',
+                                     comment=f'flagversion before running hifv_aoflagger(flag_target={self.inputs.flag_target}, '
+                                             f'use_corrected={self.inputs.use_corrected}, aoflagger_file={self.inputs.aoflagger_file})',
                                      merge='replace')
         self._executor.execute(job)
 
-
         # Do the actual flagging
-        if self.inputs.flag_target in ('primary', 'secondary', 'science'):
-            datacolumn = 'DATA'
-        else:
+        if self.inputs.use_corrected:
             datacolumn = 'CORRECTED_DATA'
+        else:
+            datacolumn = 'DATA'
 
         self.do_rfi_flag(fieldselect=fieldselect, datacolumn=datacolumn)
+
+        # Remove the flag version if it already exists
+        job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='list')
+        result = self._executor.execute(job)
+        flag_versions = {v['name'] for k, v in result.items() if k != "MS"}
+        version_name = f"{self.inputs.flag_target}-{'corrected' if self.inputs.use_corrected else 'data'}"
+        if version_name in flag_versions:
+            LOG.info(f"Removing old flag version {version_name}")
+            job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='delete', versionname=version_name)
+            self._executor.execute(job)
+        # Save current flag state
+        LOG.info(f"Saving current flag state as {version_name}")
+        job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='save', versionname=version_name)
+        self._executor.execute(job)
 
         # PIPE-502/757/995: get after-flagging statistics, NOT for bpd-vlass and allcals-vlass
         job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='after',
@@ -192,18 +195,6 @@ class Aoflagger(basetask.StandardTaskTemplate):
             job = casa_tasks.uvsub(vis=self.inputs.vis, reverse=True)
             self._executor.execute(job)
 
-        # Remove the flag version if it already exists
-        job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='list')
-        result = self._executor.execute(job)
-        flag_versions = {v['name'] for k, v in result.items() if k != "MS"}
-        if self.inputs.flag_target in flag_versions:
-            LOG.info(f"Removing old flag version {self.inputs.flag_target}")
-            job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='delete', versionname=self.inputs.flag_target)
-            self._executor.execute(job)
-        # Save current flag state
-        LOG.info(f"Saving current flag state as {self.inputs.flag_target}")
-        job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='save', versionname=self.inputs.flag_target)
-        self._executor.execute(job)
 
     def _select_data(self):
         """Selects data according to the specified checkflagmode.
@@ -224,56 +215,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
         fieldselect = scanselect = intentselect = ''
         columnselect = 'corrected' if "corrected" in self.inputs.flag_target else 'data'
 
-        ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
-        msinfo = self.inputs.context.evla['msinfo'].get(ms.name, None)
-        sci_spw_list = [spw.id for spw in ms.get_spectral_windows(science_windows_only=True)]
-
-        # If primary, select Bandpass/Delay (BPD) calibrators
-        if self.inputs.flag_target in ('primary', 'primary-corrected'):
-            fieldselect = msinfo.checkflagfields
-            # PIPE-1335: down-select scans using both msinfo.checkflagfields and msinfo.testgainscans.
-            # msinfo.testgainscans alone may include scans of fields not in msinfo.checkflagfields
-            # (e.g., second calibrators with bandpass or delay intents). See the 21A-311 case from PIPE-1335.
-            if msinfo.testgainscans:
-                testpbd_scans = {
-                    s.id for s in ms.get_scans(
-                        scan_id=list(map(int, msinfo.testgainscans.split(','))),
-                        field=msinfo.checkflagfields, spw=sci_spw_list)}
-            else:
-                testpbd_scans = set()
-            scanselect = ','.join(map(str, sorted(testpbd_scans)))
-
-        # Select all calibrators excluding BPD calibrators
-        if self.inputs.flag_target in ('secondary', 'secondary-corrected'):
-            if msinfo.testgainscans:
-                testpbd_scans = {
-                    s.id for s in ms.get_scans(
-                        scan_id=list(map(int, msinfo.testgainscans.split(','))),
-                        field=msinfo.checkflagfields, spw=sci_spw_list)}
-            else:
-                testpbd_scans = set()
-            allcals_scans = {
-                s.id for s in ms.get_scans(
-                    scan_id=list(map(int, msinfo.calibrator_scan_select_string.split(','))),
-                    field=msinfo.calibrator_field_select_string, spw=sci_spw_list)}
-            scanselect = ','.join(map(str, sorted(allcals_scans-testpbd_scans)))
-
-            # PIPE-1335: only construct the field selection string if the scan selection string is not empty.
-            # Note that an exclusion based on msinfo.checkflagfield might accidentaly reject fields observed
-            # in different intents across scans. See the 21B-136 case from PIPE-1335.
-            if scanselect:
-                fields_in_scans = {
-                    f.id for scan in ms.get_scans(
-                        scan_id=list(allcals_scans - testpbd_scans),
-                        field=msinfo.calibrator_field_select_string, spw=sci_spw_list)
-                    for f in scan.fields}
-                fieldselect = ','.join(map(str, sorted(fields_in_scans)))
-
-        # select targets
-        if self.inputs.flag_target in ('science', 'science-corrected'):
-            fieldids = [field.id for field in ms.get_fields(intent='TARGET')]
-            fieldselect = ','.join([str(fieldid) for fieldid in fieldids])
-            intentselect = '*TARGET*'
+        fieldselect = self.inputs.flag_target
 
         LOG.debug('FieldSelect:  {}'.format(repr(fieldselect)))
         LOG.debug('ScanSelect:   {}'.format(repr(scanselect)))
