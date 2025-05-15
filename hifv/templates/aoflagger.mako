@@ -8,7 +8,7 @@ import pipeline.infrastructure.utils as utils
 
 <%block name="title">RFI Flagging</%block>
 
-<p>Flag possible RFI using aoflagger; flag_target=${repr(result[0].inputs['flag_target'])}.</p>
+<p>Flag possible RFI using aoflagger; flag_target=${repr(result[0].inputs['flag_target'])}, use_corrected=${repr(result[0].inputs['use_corrected'])}.</p>
 
 
 <%
@@ -44,7 +44,7 @@ for ms in summary_plots:
 %endif
 
 
-% if result[0].inputs['flag_target'] in ( 'primary', 'secondary', 'science', 'primary-corrected', 'secondary-corrected', 'science-corrected'):
+% if True:
 
 <%
 

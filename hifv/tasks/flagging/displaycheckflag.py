@@ -22,14 +22,7 @@ class aoflaggerSummaryChart(object):
         # self.caltable = result.final[0].gaintable
 
     def plot(self):
-        plots = [None]
-
-        if self.result.inputs['flag_target'] in ('primary', 'primary-corrected'):
-            plots = [self.get_plot_wrapper('primary')]
-        if self.result.inputs['flag_target'] in ('secondary', 'secondary-corrected'):
-            plots = [self.get_plot_wrapper('secondary')]
-        if self.result.inputs['flag_target'] == 'science':
-            plots = [self.get_plot_wrapper('science')]
+        plots = [self.get_plot_wrapper(self.result.inputs['flag_target'])]
         return [p for p in plots if p is not None]
 
     def create_plot(self, prefix):
