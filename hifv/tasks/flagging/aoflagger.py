@@ -85,7 +85,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
         vis_averaged = {}   # Time-averaged MS and stats for summary plots
 
         # abort if the field is not recognized
-        if self.inputs.flag_target not in ms.get_fields():
+        if ms.get_fields(name=self.inputs.flag_target):
             LOG.warning("Unrecognized field for flag_target. RFI flagging not executed.")
             return AoflaggerResults(summaries=summaries)
 
