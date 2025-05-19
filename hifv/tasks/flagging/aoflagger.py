@@ -84,8 +84,8 @@ class Aoflagger(basetask.StandardTaskTemplate):
         summaries = []      # Flagging statistics summaries for VLA QA scoring (CAS-10910/10916/10921)
         vis_averaged = {}   # Time-averaged MS and stats for summary plots
 
-        # abort if the field is not recognized
-        if ms.get_fields(name=self.inputs.flag_target):
+        # abort if the field is not recognized only accept name as target
+        if not ms.get_fields(name=self.inputs.flag_target):
             LOG.warning("Unrecognized field for flag_target. RFI flagging not executed.")
             return AoflaggerResults(summaries=summaries)
 

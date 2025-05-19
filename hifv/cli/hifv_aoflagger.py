@@ -5,7 +5,6 @@ import pipeline.h.cli.utils as utils
 
 @utils.cli_wrapper
 def hifv_aoflagger(vis=None, flag_target=None, aoflagger_file=None, use_corrected=None):
-
     """
     hifv_aoflagger ---- Run RFI flagging using aoflagger
 
