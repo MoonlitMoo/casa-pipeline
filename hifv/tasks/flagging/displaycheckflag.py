@@ -22,14 +22,7 @@ class aoflaggerSummaryChart(object):
         # self.caltable = result.final[0].gaintable
 
     def plot(self):
-        plots = [None]
-
-        if self.result.inputs['flag_target'] in ('primary', 'primary-corrected'):
-            plots = [self.get_plot_wrapper('primary')]
-        if self.result.inputs['flag_target'] in ('secondary', 'secondary-corrected'):
-            plots = [self.get_plot_wrapper('secondary')]
-        if self.result.inputs['flag_target'] == 'science':
-            plots = [self.get_plot_wrapper('science')]
+        plots = [self.get_plot_wrapper(self.result.inputs['flag_target'])]
         return [p for p in plots if p is not None]
 
     def create_plot(self, prefix):
@@ -50,11 +43,14 @@ class aoflaggerSummaryChart(object):
             vis = self.result.vis_averaged['after']
             amp_range = [0., 0.]
             title = 'Amp vs. Frequency (after flagging, autoscale), {}'.format(prefix)
+        if self.result.inputs['use_corrected']:
+            title = f"Corrected {title}"
 
         # use the time-averged MS from the task to make the CASAplotms callmodify the plotms() call args.
+        column = 'corrected' if self.result.inputs['use_corrected'] else 'data'
         plotms_args = {'vis': vis,
                        'xaxis': 'freq', 'yaxis': 'amp',
-                       'xdatacolumn': '', 'ydatacolumn': 'data',
+                       'xdatacolumn': '', 'ydatacolumn': column,
                        'selectdata': True, 'field': '', 'scan': '', 'correlation': '',
                        'averagedata': False, 'avgtime': '1e8', 'avgscan': False,
                        'transform': False, 'extendflag': False,

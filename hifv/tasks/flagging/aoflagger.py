@@ -26,7 +26,7 @@ class AoflaggerInputs(vdp.StandardInputs):
     use_corrected = vdp.VisDependentProperty(default='')
     aoflagger_file = vdp.VisDependentProperty(default='')
 
-    def __init__(self, context, vis=None, flag_target=None, use_corrected=None, aoflagger_file=None):
+    def __init__(self, context, vis=None, flag_target=None, use_corrected=False, aoflagger_file=None):
         super(AoflaggerInputs, self).__init__()
         self.context = context
         self.vis = vis
