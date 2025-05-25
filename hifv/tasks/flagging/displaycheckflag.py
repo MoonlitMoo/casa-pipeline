@@ -61,10 +61,6 @@ class aoflaggerSummaryChart(object):
         amp_d = amp_range[1]-amp_range[0]
         plotms_args.update(plotrange=[0, 0, max(0, amp_range[0]-0.1*amp_d), amp_range[1]+0.1*amp_d])
 
-        if prefix == 'primary':
-            plotms_args.update(field=self.context.evla['msinfo'][self.ms.name].bandpass_field_select_string)
-            plotms_args.update(scan=self.context.evla['msinfo'][self.ms.name].bandpass_scan_select_string)
-        
         LOG.info('Creating {}'.format(plotms_args['title']))
 
         # run plotms
@@ -77,7 +73,7 @@ class aoflaggerSummaryChart(object):
         stage_dir = os.path.join(self.context.report_dir, 'stage{}'.format(self.result.stage_number))
         if not os.path.exists(stage_dir):
             os.mkdir(stage_dir)
-        fig_basename = '-'.join(list(filter(None, ['aoflagger', prefix,
+        fig_basename = '-'.join(list(filter(None, ['aoflagger', prefix.strip('"'),
                                                    self.ms.basename, 'summary', self.suffix])))+'.png'
         return os.path.join(stage_dir, fig_basename)
 

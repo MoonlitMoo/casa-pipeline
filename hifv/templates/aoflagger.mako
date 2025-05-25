@@ -73,6 +73,7 @@ def percent_flagged_diff(flagsummary1, flagsummary2):
 %>
 
 % for ms in flags.keys():
+<% ms = ms.strip('"') %>
 
 <h3 id="flagged_data_summary" class="jumptarget">Aoflagger Summary</h3>
 
