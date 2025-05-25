@@ -70,7 +70,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
     def prepare(self):
 
-        LOG.info(f"Aoflagger task: {self.inputs.flag_target}, using {self.inputs.aoflagger_file}")
+        LOG.info(f"Aoflagger task: Operating on {self.inputs.flag_target}, with strategy {self.inputs.aoflagger_file}")
 
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
 
@@ -84,28 +84,22 @@ class Aoflagger(basetask.StandardTaskTemplate):
         summaries = []      # Flagging statistics summaries for VLA QA scoring (CAS-10910/10916/10921)
         vis_averaged = {}   # Time-averaged MS and stats for summary plots
 
-        # abort if the field is not recognized only accept name as target
-        if not ms.get_fields(name=self.inputs.flag_target):
-            LOG.warning("Unrecognized field for flag_target. RFI flagging not executed.")
-            return AoflaggerResults(summaries=summaries)
+        fieldselect, columnselect = self._select_data()
 
-        fieldselect, scanselect, intentselect, columnselect = self._select_data()
-
-        # PIPE-1335: abort if both fieldselect and scanselect are empty strings.
-        if not (fieldselect or scanselect):
-            LOG.warning("No scans with selected intent(s) from flag_target={!r}. RFI flagging not executed.".format(
-                self.inputs.flag_target))
+        # abort if the field is not recognized
+        if fieldselect == '':
+            LOG.warning("Unrecognized field name or id for flag_target. RFI flagging not executed.")
             return AoflaggerResults(summaries=summaries)
 
         # abort if the data selection criteria lead to NUll selection
-        if not mssel_valid(self.inputs.vis, field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws):
+        if not mssel_valid(self.inputs.vis, field=fieldselect, scan='', intent='', spw=self.sci_spws):
             LOG.warning("Null data selection from flag_target={!r}. RFI flagging not executed.".format(
-                self.inputs.flag_target))
+                fieldselect))
             return AoflaggerResults(summaries=summaries)
 
         # Run before flagging summary
         job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='before',
-                                  field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
+                                  field=fieldselect, scan='', intent='', spw=self.sci_spws)
         summarydict = self._executor.execute(job)
         if summarydict is not None:
             summaries.append(summarydict)
@@ -114,9 +108,9 @@ class Aoflagger(basetask.StandardTaskTemplate):
         vis_averaged_before, vis_ampstats_before = self._create_timeavg_ms(suffix='before')
         vis_averaged.update(before=vis_averaged_before, before_amp=vis_ampstats_before)
         plotms_dataselect = {'field':  fieldselect,
-                             'scan': scanselect,
+                             'scan': '',
                              'spw': self.sci_spws,
-                             'intent': intentselect,
+                             'intent': '',
                              'ydatacolumn': 'data',
                              'correlation': self.corrstring}
         vis_averaged['plotms_dataselect'] = plotms_dataselect
@@ -155,7 +149,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
         # PIPE-502/757/995: get after-flagging statistics, NOT for bpd-vlass and allcals-vlass
         job = casa_tasks.flagdata(vis=self.inputs.vis, mode='summary', name='after',
-                                  field=fieldselect, scan=scanselect, intent=intentselect, spw=self.sci_spws)
+                                  field=fieldselect, scan='', intent='', spw=self.sci_spws)
         summarydict = self._executor.execute(job)
         if summarydict is not None:
             summaries.append(summarydict)
@@ -168,8 +162,8 @@ class Aoflagger(basetask.StandardTaskTemplate):
         checkflag_result.summaries = summaries
         checkflag_result.vis_averaged = vis_averaged
         checkflag_result.dataselect = {'field': fieldselect,
-                                       'scan': scanselect,
-                                       'intent': intentselect,
+                                       'scan': '',
+                                       'intent': '',
                                        'spw': self.sci_spws}
 
         return checkflag_result
@@ -212,17 +206,20 @@ class Aoflagger(basetask.StandardTaskTemplate):
         """
 
         # start with default
-        fieldselect = scanselect = intentselect = ''
-        columnselect = 'corrected' if "corrected" in self.inputs.flag_target else 'data'
+        columnselect = 'corrected' if self.inputs.use_corrected else 'data'
 
-        fieldselect = self.inputs.flag_target
+        ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
+        try:
+            fields = ms.get_fields(field_id=int(self.inputs.flag_target))
+            fieldselect = str(fields[0].id)
+        except:
+            fields = ms.get_fields(name=self.inputs.flag_target)
+            fieldselect = str(fields[0].id)
 
         LOG.debug('FieldSelect:  {}'.format(repr(fieldselect)))
-        LOG.debug('ScanSelect:   {}'.format(repr(scanselect)))
-        LOG.debug('IntentSelect: {}'.format(repr(intentselect)))
         LOG.debug('ColumnSelect: {}'.format(repr(columnselect)))
 
-        return fieldselect, scanselect, intentselect, columnselect
+        return fieldselect, columnselect
 
     def _create_timeavg_ms(self, suffix='before'):
 
@@ -235,19 +232,15 @@ class Aoflagger(basetask.StandardTaskTemplate):
         LOG.debug('Estimating the amplitude range of unflagged averaged data for {} : {}'.format(vis_averaged_name, suffix))
 
         # do cross-scan averging for calibrator checkflagmodes
-        if self.inputs.flag_target in ('science'):
-            timespan = ''
-        else:
-            timespan = 'scan'
 
-        fieldselect, scanselect, intentselect, columnselect = self._select_data()
+        fieldselect, columnselect = self._select_data()
 
         shutil.rmtree(vis_averaged_name, ignore_errors=True)
         job = casa_tasks.mstransform(vis=self.inputs.vis, outputvis=vis_averaged_name,
-                                     field=fieldselect, spw=self.sci_spws, scan=scanselect,
-                                     intent=intentselect, datacolumn=columnselect,
+                                     field=fieldselect, spw=self.sci_spws, scan='',
+                                     intent='', datacolumn=columnselect,
                                      correlation=self.corrstring,
-                                     timeaverage=True, timebin='1e8', timespan=timespan,
+                                     timeaverage=True, timebin='1e8', timespan='',
                                      keepflags=False, reindex=False)
         job.execute()
 
