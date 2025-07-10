@@ -211,10 +211,12 @@ class Aoflagger(basetask.StandardTaskTemplate):
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
         try:
             fields = ms.get_fields(field_id=int(self.inputs.flag_target))
-            fieldselect = str(fields[0].id)
+
         except:
             fields = ms.get_fields(name=self.inputs.flag_target)
-            fieldselect = str(fields[0].id)
+        if not fields:
+            return '', ''
+        fieldselect = str(fields[0].id)
 
         LOG.debug('FieldSelect:  {}'.format(repr(fieldselect)))
         LOG.debug('ColumnSelect: {}'.format(repr(columnselect)))
