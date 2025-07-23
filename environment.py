@@ -526,7 +526,10 @@ class CGroupLimit:
 
         @staticmethod
         def get_limit(controllers: typing.Dict[str, CGroupController]) -> CGroupLimit.CPUAllocation:
-            controller = controllers['cpuset']
+            controller = controllers.get('cpuset')
+            if controller is None:
+                # Fallback: no cgroup cpuset control; assume unlimited CPU
+                return 'N/A'
             str_limits = controller.get_limits(
                 ['cpuset.cpus'],
                 ['cpuset.cpus', 'cpuset.cpus.effective']
@@ -556,7 +559,10 @@ class CGroupLimit:
 
         @staticmethod
         def get_limit(controllers: typing.Dict[str, CGroupController]):
-            controller = controllers['memory']
+            controller = controllers.get('memory')
+            if controller is None:
+                # Fallback: no memory key
+                return 'N/A'
             str_limits = controller.get_limits(
                 ["memory.limit_in_bytes", "memory.memsw.limit_in_bytes", "memory.soft_limit_in_bytes"],
                 ["memory.high", "memory.max"]
