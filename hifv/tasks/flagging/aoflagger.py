@@ -23,15 +23,15 @@ class AoflaggerInputs(vdp.StandardInputs):
     processing_data_type = [DataType.REGCAL_CONTLINE_ALL, DataType.RAW]
 
     flag_target = vdp.VisDependentProperty(default='')
-    use_corrected = vdp.VisDependentProperty(default='')
+    datacolumn = vdp.VisDependentProperty(default='')
     aoflagger_file = vdp.VisDependentProperty(default='')
 
-    def __init__(self, context, vis=None, flag_target=None, use_corrected=False, aoflagger_file=None):
+    def __init__(self, context, vis=None, flag_target=None, datacolumn='data', aoflagger_file=None):
         super(AoflaggerInputs, self).__init__()
         self.context = context
         self.vis = vis
         self.flag_target = flag_target
-        self.use_corrected = use_corrected
+        self.datacolumn = datacolumn
         self.aoflagger_file = aoflagger_file
 
 
@@ -70,10 +70,10 @@ class Aoflagger(basetask.StandardTaskTemplate):
 
     def prepare(self):
 
-        LOG.info(f"Aoflagger task: Operating on {self.inputs.flag_target}, with strategy {self.inputs.aoflagger_file}")
+        LOG.info(f"Aoflagger task: Operating on {self.inputs.flag_target}, with strategy {self.inputs.aoflagger_file}, and column {self.inputs.datacolumn}")
 
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
-
+        
         # a string representing selected polarizations, only parallel hands
         # this is only preserved to maintain the existing behavior of checkflagmode=''/'semi'
         self.corrstring = ms.get_vla_corrstring()
@@ -111,7 +111,7 @@ class Aoflagger(basetask.StandardTaskTemplate):
                              'scan': '',
                              'spw': self.sci_spws,
                              'intent': '',
-                             'ydatacolumn': 'data',
+                             'ydatacolumn': columnselect,
                              'correlation': self.corrstring}
         vis_averaged['plotms_dataselect'] = plotms_dataselect
 
@@ -121,23 +121,18 @@ class Aoflagger(basetask.StandardTaskTemplate):
                                      versionname='hifv_aoflagger_{}_stage{}_{}'.format(
                                          self.inputs.flag_target, self.inputs.context.task_counter, now_str),
                                      comment=f'flagversion before running hifv_aoflagger(flag_target={self.inputs.flag_target}, '
-                                             f'use_corrected={self.inputs.use_corrected}, aoflagger_file={self.inputs.aoflagger_file})',
+                                             f'datacolumn={self.inputs.datacolumn}, aoflagger_file={self.inputs.aoflagger_file})',
                                      merge='replace')
         self._executor.execute(job)
 
         # Do the actual flagging
-        if self.inputs.use_corrected:
-            datacolumn = 'CORRECTED_DATA'
-        else:
-            datacolumn = 'DATA'
-
-        self.do_rfi_flag(fieldselect=fieldselect, datacolumn=datacolumn)
+        self.do_rfi_flag(fieldselect=fieldselect, datacolumn=columnselect)
 
         # Remove the flag version if it already exists
         job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='list')
         result = self._executor.execute(job)
         flag_versions = {v['name'] for k, v in result.items() if k != "MS"}
-        version_name = f"{self.inputs.flag_target}-{'corrected' if self.inputs.use_corrected else 'data'}"
+        version_name = f"{self.inputs.flag_target}-{self.inputs.datacolumn.lower()}"
         if version_name in flag_versions:
             LOG.info(f"Removing old flag version {version_name}")
             job = casa_tasks.flagmanager(vis=self.inputs.vis, mode='delete', versionname=version_name)
@@ -174,17 +169,17 @@ class Aoflagger(basetask.StandardTaskTemplate):
     def do_rfi_flag(self, fieldselect='', datacolumn='DATA'):
         """Do RFI flagging using multiple passes of rflag/tfcrop/extend."""
 
-        if datacolumn == 'CORRECTED_DATA':
-            LOG.info("UV subtracting vis datacolumn is corrected and we want to run on the residuals")
+        if self.inputs.datacolumn.lower() == 'residual':
+            LOG.info("UV subtracting to run flagging on the residuals")
             job = casa_tasks.uvsub(vis=self.inputs.vis)
             self._executor.execute(job)
-        cmd = f"aoflagger -fields {fieldselect} -column {datacolumn} -strategy {self.inputs.aoflagger_file} {self.inputs.vis}"
+        cmd = f"aoflagger -fields {fieldselect} -column {datacolumn.upper()} -strategy {self.inputs.aoflagger_file} {self.inputs.vis}"
 
         LOG.info(f"Running '{cmd}' via subprocess")
         result = subprocess.run(cmd)
         LOG.info(f"Finished with exit code {result}")
 
-        if datacolumn == 'CORRECTED_DATA':
+        if self.inputs.datacolumn.lower() == 'residual':
             LOG.info("Reversing UV subtraction on vis")
             job = casa_tasks.uvsub(vis=self.inputs.vis, reverse=True)
             self._executor.execute(job)
@@ -206,12 +201,15 @@ class Aoflagger(basetask.StandardTaskTemplate):
         """
 
         # start with default
-        columnselect = 'corrected' if self.inputs.use_corrected else 'data'
+        if self.inputs.datacolumn.lower() not in ["data", "corrected", "residual"]:
+            LOG.warning(f"Unrecognised column {self.inputs.datacolumn}, must be in [DATA, CORRECTED, RESIDUAL] (case-insensitive)")
+            return '', '' 
+        # Use corrected for residual, since we will uvsubtract during rfi process.
+        columnselect = 'data' if self.inputs.datacolumn == 'data' else 'corrected'
 
         ms = self.inputs.context.observing_run.get_ms(self.inputs.vis)
         try:
             fields = ms.get_fields(field_id=int(self.inputs.flag_target))
-
         except:
             fields = ms.get_fields(name=self.inputs.flag_target)
         if not fields:

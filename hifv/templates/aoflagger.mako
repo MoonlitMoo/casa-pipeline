@@ -8,7 +8,7 @@ import pipeline.infrastructure.utils as utils
 
 <%block name="title">RFI Flagging</%block>
 
-<p>Flag possible RFI using aoflagger; flag_target=${repr(result[0].inputs['flag_target'])}, use_corrected=${repr(result[0].inputs['use_corrected'])}.</p>
+<p>Flag possible RFI using aoflagger; flag_target=${repr(result[0].inputs['flag_target'])}, datacolumn=${repr(result[0].inputs['datacolumn'])}.</p>
 
 
 <%

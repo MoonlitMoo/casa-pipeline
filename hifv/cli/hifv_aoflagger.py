@@ -4,7 +4,7 @@ import pipeline.h.cli.utils as utils
 
 
 @utils.cli_wrapper
-def hifv_aoflagger(vis=None, flag_target=None, aoflagger_file=None, use_corrected=None):
+def hifv_aoflagger(vis=None, flag_target=None, aoflagger_file=None, datacolumn=None):
     """
     hifv_aoflagger ---- Run RFI flagging using aoflagger
 
@@ -18,15 +18,11 @@ def hifv_aoflagger(vis=None, flag_target=None, aoflagger_file=None, use_correcte
 
     vis                The list of input MeasurementSets. Defaults to the list of MeasurementSets
                        specified in the h_init or hifv_importdata task.
-    flag_target      --
-    aoflagger_file
+    flag_target        The field specified to run flagging on.
+    aoflagger_file     The Lua file to use for flagging
+    datacolumn         The column to use for flagging, [data, corrected, residual].
 
     --------- examples -----------------------------------------------------------
-
-
-    1. Run RFLAG with associated heuristics in the VLA CASA pipeline.
-
-    >>> hifv_checkflag()
 
 
     """

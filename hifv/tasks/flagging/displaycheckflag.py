@@ -43,11 +43,11 @@ class aoflaggerSummaryChart(object):
             vis = self.result.vis_averaged['after']
             amp_range = [0., 0.]
             title = 'Amp vs. Frequency (after flagging, autoscale), {}'.format(prefix)
-        if self.result.inputs['use_corrected']:
+        if self.result.inputs['datacolumn'].lower() != 'data':
             title = f"Corrected {title}"
 
         # use the time-averged MS from the task to make the CASAplotms callmodify the plotms() call args.
-        column = 'corrected' if self.result.inputs['use_corrected'] else 'data'
+        column = 'data' if self.result.inputs['datacolumn'].lower() == 'data' else 'corrected'
         plotms_args = {'vis': vis,
                        'xaxis': 'freq', 'yaxis': 'amp',
                        'xdatacolumn': '', 'ydatacolumn': column,
